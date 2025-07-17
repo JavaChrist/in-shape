@@ -1,217 +1,153 @@
 import React, { useState } from 'react';
-import { CalendarIcon, CheckCircleIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { CalendarIcon, ChartBarIcon, ClockIcon } from '@heroicons/react/24/outline';
 
-interface Habit {
-  id: string;
-  category: 'ALIMENTATION' | 'SOMMEIL' | 'SPORTS' | 'QUESTIONS & PROJECTION';
-  text: string;
-  completed: { [week: string]: boolean };
+interface NutritionEntry {
+  petitDejeuner: string;
+  dejeuner: string;
+  collation: string;
+  diner: string;
+  eauBoissons: string;
+  alcool: string;
+}
+
+interface WeekData {
+  nutrition: {
+    lundi: NutritionEntry;
+    mardi: NutritionEntry;
+    mercredi: NutritionEntry;
+    jeudi: NutritionEntry;
+    vendredi: NutritionEntry;
+    samedi: NutritionEntry;
+    dimanche: NutritionEntry;
+  };
+  sommeil: {
+    lundi: string;
+    mardi: string;
+    mercredi: string;
+    jeudi: string;
+    vendredi: string;
+    samedi: string;
+    dimanche: string;
+  };
 }
 
 const Nutrition: React.FC = () => {
   const [currentWeek, setCurrentWeek] = useState(1);
-  const [habits, setHabits] = useState<Habit[]>([
-    // ALIMENTATION
-    {
-      id: 'alim1',
-      category: 'ALIMENTATION',
-      text: 'Mis le focus sur un petit déj salé',
-      completed: {}
-    },
-    {
-      id: 'alim2',
-      category: 'ALIMENTATION',
-      text: 'Segmente mes assiettes 50% légumes + 25% prot + 25% glucides',
-      completed: {}
-    },
-    {
-      id: 'alim3',
-      category: 'ALIMENTATION',
-      text: "Je n'ai pas grignoté entre les repas",
-      completed: {}
-    },
-    {
-      id: 'alim4',
-      category: 'ALIMENTATION',
-      text: "J'ai bu 2 litres d'eau par jour",
-      completed: {}
-    },
-    {
-      id: 'alim5',
-      category: 'ALIMENTATION',
-      text: "Je n'ai pas bu d'alcool",
-      completed: {}
-    },
-    {
-      id: 'alim6',
-      category: 'ALIMENTATION',
-      text: "J'ai atteint les XX g de prot / jour recommandé par mon coach",
-      completed: {}
-    },
-    {
-      id: 'alim7',
-      category: 'ALIMENTATION',
-      text: "J'ai effectué 24h de jeun",
-      completed: {}
-    },
-    {
-      id: 'alim8',
-      category: 'ALIMENTATION',
-      text: "J'ai mis en place de Carb cycling 3 jour LOW, 3 jours normaux et 1 jour JEUN",
-      completed: {}
-    },
+  const [weekData, setWeekData] = useState<{ [week: number]: WeekData }>({});
 
-    // SOMMEIL
-    {
-      id: 'sleep1',
-      category: 'SOMMEIL',
-      text: "J'ai dormi à intervalles réguliers",
-      completed: {}
-    },
-    {
-      id: 'sleep2',
-      category: 'SOMMEIL',
-      text: "J'ai eu un sommeil de qualité",
-      completed: {}
-    },
+  const jours = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+  const joursLabels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  const categoriesNutrition = [
+    { key: 'petitDejeuner', label: 'Petit déjeuner', color: 'bg-yellow-50 border-yellow-200' },
+    { key: 'dejeuner', label: 'Déjeuner', color: 'bg-green-50 border-green-200' },
+    { key: 'collation', label: 'Collation', color: 'bg-blue-50 border-blue-200' },
+    { key: 'diner', label: 'Dîner', color: 'bg-purple-50 border-purple-200' },
+    { key: 'eauBoissons', label: 'Eau & Boissons', color: 'bg-cyan-50 border-cyan-200' },
+    { key: 'alcool', label: 'Alcool', color: 'bg-red-50 border-red-200' }
+  ];
 
-    // SPORTS
-    {
-      id: 'sport1',
-      category: 'SPORTS',
-      text: "J'ai marché tous les jours, 6000 pas minimum",
-      completed: {}
-    },
-    {
-      id: 'sport2',
-      category: 'SPORTS',
-      text: "J'ai marché 3 fois dans la semaine et atteint 8000 pas mini au moins 1 fois",
-      completed: {}
-    },
-    {
-      id: 'sport3',
-      category: 'SPORTS',
-      text: "J'ai effectué 2 séances de Sport (Pyramide ou Fatburner ou Super4)",
-      completed: {}
-    },
-    {
-      id: 'sport4',
-      category: 'SPORTS',
-      text: "J'ai effectué 3 séances de Sport (Pyramide ou Fatburner ou Super4)",
-      completed: {}
-    },
-    {
-      id: 'sport5',
-      category: 'SPORTS',
-      text: "J'ai augmenté mes charges lors de mes exercices et suivi reco de mon coach",
-      completed: {}
-    },
+  const getWeekData = (week: number): WeekData => {
+    if (!weekData[week]) {
+      const emptyNutritionEntry: NutritionEntry = {
+        petitDejeuner: '',
+        dejeuner: '',
+        collation: '',
+        diner: '',
+        eauBoissons: '',
+        alcool: ''
+      };
 
-    // QUESTIONS & PROJECTION
-    {
-      id: 'quest1',
-      category: 'QUESTIONS & PROJECTION',
-      text: "J'ai posé les questions à mon coach dans mon fil Telegram",
-      completed: {}
-    },
-    {
-      id: 'quest2',
-      category: 'QUESTIONS & PROJECTION',
-      text: "J'ai reçu les réponses et elles sont claires pour moi",
-      completed: {}
-    },
-    {
-      id: 'quest3',
-      category: 'QUESTIONS & PROJECTION',
-      text: "J'ai planifié ma semaine à venir",
-      completed: {}
-    },
-    {
-      id: 'quest4',
-      category: 'QUESTIONS & PROJECTION',
-      text: "J'ai perdu du poids factuellement",
-      completed: {}
-    },
-    {
-      id: 'quest5',
-      category: 'QUESTIONS & PROJECTION',
-      text: "J'ai perdu du tour de taille factuellement",
-      completed: {}
-    },
-    {
-      id: 'quest6',
-      category: 'QUESTIONS & PROJECTION',
-      text: "J'ai rempli mon tableau semaine pour que mon coach puisse bien analyser la sem",
-      completed: {}
-    },
-    {
-      id: 'quest7',
-      category: 'QUESTIONS & PROJECTION',
-      text: "J'ai appris de nouvelles choses que je vais pouvoir mettre en place",
-      completed: {}
+      return {
+        nutrition: {
+          lundi: { ...emptyNutritionEntry },
+          mardi: { ...emptyNutritionEntry },
+          mercredi: { ...emptyNutritionEntry },
+          jeudi: { ...emptyNutritionEntry },
+          vendredi: { ...emptyNutritionEntry },
+          samedi: { ...emptyNutritionEntry },
+          dimanche: { ...emptyNutritionEntry }
+        },
+        sommeil: {
+          lundi: '',
+          mardi: '',
+          mercredi: '',
+          jeudi: '',
+          vendredi: '',
+          samedi: '',
+          dimanche: ''
+        }
+      };
     }
-  ]);
+    return weekData[week];
+  };
 
-  const toggleHabit = (habitId: string, week: number) => {
-    setHabits(prev => prev.map(habit => {
-      if (habit.id === habitId) {
-        return {
-          ...habit,
-          completed: {
-            ...habit.completed,
-            [week]: !habit.completed[week]
+  const updateNutritionEntry = (week: number, jour: string, categorie: string, value: string) => {
+    setWeekData(prev => {
+      const currentData = getWeekData(week);
+      const currentJourData = currentData.nutrition[jour as keyof typeof currentData.nutrition];
+
+      return {
+        ...prev,
+        [week]: {
+          ...currentData,
+          nutrition: {
+            ...currentData.nutrition,
+            [jour]: {
+              ...currentJourData,
+              [categorie]: value
+            }
           }
-        };
-      }
-      return habit;
-    }));
+        }
+      };
+    });
   };
 
-  const getWeekProgress = (week: number) => {
-    const totalHabits = habits.length;
-    const completedHabits = habits.filter(habit => habit.completed[week]).length;
-    return totalHabits > 0 ? Math.round((completedHabits / totalHabits) * 100) : 0;
+  const updateSommeilEntry = (week: number, jour: string, value: string) => {
+    setWeekData(prev => {
+      const currentData = getWeekData(week);
+
+      return {
+        ...prev,
+        [week]: {
+          ...currentData,
+          sommeil: {
+            ...currentData.sommeil,
+            [jour]: value
+          }
+        }
+      };
+    });
   };
 
-  const getCategoryProgress = (category: string, week: number) => {
-    const categoryHabits = habits.filter(habit => habit.category === category);
-    const completedCategoryHabits = categoryHabits.filter(habit => habit.completed[week]).length;
-    return categoryHabits.length > 0 ? Math.round((completedCategoryHabits / categoryHabits.length) * 100) : 0;
-  };
+  const currentWeekData = getWeekData(currentWeek);
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'ALIMENTATION': return 'bg-green-50 border-green-200';
-      case 'SOMMEIL': return 'bg-blue-50 border-blue-200';
-      case 'SPORTS': return 'bg-orange-50 border-orange-200';
-      case 'QUESTIONS & PROJECTION': return 'bg-purple-50 border-purple-200';
-      default: return 'bg-gray-50 border-gray-200';
+  const getWeekDates = (weekNumber: number) => {
+    const year = new Date().getFullYear();
+    const firstDayOfYear = new Date(year, 0, 1);
+    const daysOffset = (weekNumber - 1) * 7;
+    const startDate = new Date(firstDayOfYear.getTime() + daysOffset * 24 * 60 * 60 * 1000);
+
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
+      dates.push(date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }));
     }
+    return dates;
   };
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'ALIMENTATION': return '🍽️';
-      case 'SOMMEIL': return '😴';
-      case 'SPORTS': return '💪';
-      case 'QUESTIONS & PROJECTION': return '📊';
-      default: return '📝';
-    }
-  };
-
-  const categories = ['ALIMENTATION', 'SOMMEIL', 'SPORTS', 'QUESTIONS & PROJECTION'];
+  const weekDates = getWeekDates(currentWeek);
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tracking Habitudes</h1>
-          <p className="text-gray-600">Mes Focus semaine - Suivi hebdomadaire de vos objectifs</p>
+          <h1 className="text-2xl font-bold text-gray-900">Suivi Nutrition & Sommeil</h1>
+          <p className="text-gray-600">Tableau de suivi hebdomadaire - Semaine {currentWeek}/52</p>
         </div>
         <div className="flex items-center space-x-2 text-sm text-gray-500">
           <CalendarIcon className="h-4 w-4" />
-          <span>Semaine S{currentWeek}</span>
+          <span>Semaine {currentWeek}</span>
         </div>
       </div>
 
@@ -227,148 +163,183 @@ const Nutrition: React.FC = () => {
             >
               ← Semaine précédente
             </button>
-            <span className="px-3 py-1 bg-primary-100 text-primary-800 rounded font-medium">
-              S{currentWeek}
-            </span>
+            <select
+              value={currentWeek}
+              onChange={(e) => setCurrentWeek(parseInt(e.target.value))}
+              className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              {Array.from({ length: 53 }, (_, i) => (
+                <option key={i} value={i}>
+                  Semaine {i}
+                </option>
+              ))}
+            </select>
             <button
-              onClick={() => setCurrentWeek(currentWeek + 1)}
+              onClick={() => setCurrentWeek(Math.min(52, currentWeek + 1))}
               className="btn-sm btn-secondary"
+              disabled={currentWeek >= 52}
             >
               Semaine suivante →
             </button>
           </div>
         </div>
+      </div>
 
-        {/* Progression globale */}
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">Progression S{currentWeek}</span>
-            <span className="text-sm font-bold text-gray-900">{getWeekProgress(currentWeek)}%</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-primary-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${getWeekProgress(currentWeek)}%` }}
-            ></div>
-          </div>
+      {/* Tableau Nutrition */}
+      <div className="card">
+        <div className="flex items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+            <span className="mr-2">🍽️</span>
+            ALIMENTATION - Semaine {currentWeek}
+          </h3>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse border border-gray-300">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="border border-gray-300 p-2 text-left font-medium text-gray-900 min-w-[120px]">
+                  Repas/Boissons
+                </th>
+                {joursLabels.map((jour, index) => (
+                  <th key={jour} className="border border-gray-300 p-2 text-center font-medium text-gray-900 min-w-[100px]">
+                    <div>{jour}</div>
+                    <div className="text-xs text-gray-500">{weekDates[index]}</div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {categoriesNutrition.map((categorie) => (
+                <tr key={categorie.key} className={categorie.color}>
+                  <td className="border border-gray-300 p-2 font-medium text-gray-900">
+                    {categorie.label}
+                  </td>
+                  {jours.map((jour) => {
+                    const jourData = currentWeekData.nutrition[jour as keyof typeof currentWeekData.nutrition];
+                    const currentValue = jourData[categorie.key as keyof NutritionEntry];
+
+                    return (
+                      <td key={jour} className="border border-gray-300 p-1">
+                        <textarea
+                          value={currentValue}
+                          onChange={(e) => updateNutritionEntry(currentWeek, jour, categorie.key, e.target.value)}
+                          className="w-full h-16 p-1 text-xs border-0 resize-none focus:outline-none focus:ring-1 focus:ring-primary-500 bg-transparent"
+                          placeholder="Aliments..."
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* Grille des habitudes par catégorie */}
-      {categories.map(category => (
-        <div key={category} className={`card border ${getCategoryColor(category)}`}>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <span className="mr-2">{getCategoryIcon(category)}</span>
-              {category}
-            </h3>
-            <div className="flex items-center space-x-2">
-              <ChartBarIcon className="h-4 w-4 text-gray-500" />
-              <span className="text-sm font-medium text-gray-700">
-                {getCategoryProgress(category, currentWeek)}%
-              </span>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {habits
-              .filter(habit => habit.category === category)
-              .map(habit => (
-                <div key={habit.id} className="flex items-center justify-between p-3 bg-white rounded border">
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-900">{habit.text}</p>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    {/* Cases à cocher pour les 3 dernières semaines */}
-                    {[currentWeek - 2, currentWeek - 1, currentWeek].map(week => {
-                      if (week < 0) return null;
-                      return (
-                        <div key={week} className="flex flex-col items-center">
-                          <span className="text-xs text-gray-500 mb-1">S{week}</span>
-                          <button
-                            onClick={() => toggleHabit(habit.id, week)}
-                            className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${habit.completed[week]
-                              ? 'bg-green-500 border-green-500 text-white'
-                              : 'border-gray-300 hover:border-gray-400'
-                              }`}
-                          >
-                            {habit.completed[week] && (
-                              <CheckCircleIcon className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                      );
-                    })}
-
-                    {/* Case principale pour la semaine courante */}
-                    <button
-                      onClick={() => toggleHabit(habit.id, currentWeek)}
-                      className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-colors ${habit.completed[currentWeek]
-                        ? 'bg-green-500 border-green-500 text-white'
-                        : 'border-gray-300 hover:border-gray-400'
-                        }`}
-                    >
-                      {habit.completed[currentWeek] ? (
-                        <CheckCircleIcon className="h-5 w-5" />
-                      ) : (
-                        <span className="text-gray-400">✓</span>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ))}
-          </div>
+      {/* Tableau Sommeil */}
+      <div className="card">
+        <div className="flex items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+            <ClockIcon className="h-5 w-5 mr-2" />
+            SOMMEIL - Semaine {currentWeek}
+          </h3>
         </div>
-      ))}
 
-      {/* Résumé de la semaine */}
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse border border-gray-300">
+            <thead>
+              <tr className="bg-blue-50">
+                <th className="border border-gray-300 p-2 text-left font-medium text-gray-900 min-w-[120px]">
+                  Heures de sommeil
+                </th>
+                {joursLabels.map((jour, index) => (
+                  <th key={jour} className="border border-gray-300 p-2 text-center font-medium text-gray-900 min-w-[100px]">
+                    <div>{jour}</div>
+                    <div className="text-xs text-gray-500">{weekDates[index]}</div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="bg-blue-50">
+                <td className="border border-gray-300 p-2 font-medium text-gray-900">
+                  Coucher (22h45) / Réveil (6h00)
+                </td>
+                {jours.map((jour) => {
+                  const sommeilValue = currentWeekData.sommeil[jour as keyof typeof currentWeekData.sommeil];
+
+                  return (
+                    <td key={jour} className="border border-gray-300 p-1">
+                      <textarea
+                        value={sommeilValue}
+                        onChange={(e) => updateSommeilEntry(currentWeek, jour, e.target.value)}
+                        className="w-full h-16 p-1 text-xs border-0 resize-none focus:outline-none focus:ring-1 focus:ring-primary-500 bg-transparent"
+                        placeholder="Coucher/Réveil..."
+                      />
+                    </td>
+                  );
+                })}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Statistiques rapides */}
       <div className="card">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <ChartBarIcon className="h-5 w-5 mr-2" />
-          Résumé S{currentWeek}
+          Résumé de la semaine {currentWeek}
         </h3>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {categories.map(category => {
-            const progress = getCategoryProgress(category, currentWeek);
-            const categoryHabits = habits.filter(habit => habit.category === category);
-            const completedCount = categoryHabits.filter(habit => habit.completed[currentWeek]).length;
-
-            return (
-              <div key={category} className={`p-4 rounded-lg border ${getCategoryColor(category)}`}>
-                <div className="text-center">
-                  <div className="text-2xl mb-1">{getCategoryIcon(category)}</div>
-                  <h4 className="font-medium text-gray-900 text-sm mb-2">{category}</h4>
-                  <div className="text-2xl font-bold text-gray-900 mb-1">{progress}%</div>
-                  <div className="text-xs text-gray-600">
-                    {completedCount}/{categoryHabits.length} objectifs
-                  </div>
-                </div>
+          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+            <div className="text-center">
+              <div className="text-2xl mb-1">🍽️</div>
+              <h4 className="font-medium text-gray-900 text-sm mb-2">Alimentation</h4>
+              <div className="text-xs text-gray-600">
+                {Object.values(currentWeekData.nutrition).filter(jour =>
+                  Object.values(jour).some(repas => repas.trim() !== '')
+                ).length}/7 jours remplis
               </div>
-            );
-          })}
-        </div>
+            </div>
+          </div>
 
-        {/* Message de motivation */}
-        <div className="mt-6 p-4 bg-gradient-to-r from-primary-50 to-primary-100 rounded-lg border border-primary-200">
-          <div className="text-center">
-            {getWeekProgress(currentWeek) === 100 ? (
-              <p className="text-primary-800 font-medium">
-                🎉 Félicitations ! Vous avez atteint tous vos objectifs cette semaine !
-              </p>
-            ) : getWeekProgress(currentWeek) >= 80 ? (
-              <p className="text-primary-800 font-medium">
-                💪 Excellent travail ! Vous êtes sur la bonne voie !
-              </p>
-            ) : getWeekProgress(currentWeek) >= 50 ? (
-              <p className="text-primary-800 font-medium">
-                📈 Bon début ! Continuez vos efforts pour atteindre vos objectifs !
-              </p>
-            ) : (
-              <p className="text-primary-800 font-medium">
-                🚀 C'est le moment de vous concentrer sur vos habitudes ! Chaque petit pas compte !
-              </p>
-            )}
+          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="text-center">
+              <div className="text-2xl mb-1">😴</div>
+              <h4 className="font-medium text-gray-900 text-sm mb-2">Sommeil</h4>
+              <div className="text-xs text-gray-600">
+                {Object.values(currentWeekData.sommeil).filter(horaire =>
+                  horaire.trim() !== ''
+                ).length}/7 jours remplis
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 bg-cyan-50 rounded-lg border border-cyan-200">
+            <div className="text-center">
+              <div className="text-2xl mb-1">💧</div>
+              <h4 className="font-medium text-gray-900 text-sm mb-2">Hydratation</h4>
+              <div className="text-xs text-gray-600">
+                {Object.values(currentWeekData.nutrition).filter(jour =>
+                  jour.eauBoissons.trim() !== ''
+                ).length}/7 jours suivis
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+            <div className="text-center">
+              <div className="text-2xl mb-1">🍷</div>
+              <h4 className="font-medium text-gray-900 text-sm mb-2">Alcool</h4>
+              <div className="text-xs text-gray-600">
+                {Object.values(currentWeekData.nutrition).filter(jour =>
+                  jour.alcool.trim() !== ''
+                ).length}/7 jours notés
+              </div>
+            </div>
           </div>
         </div>
       </div>

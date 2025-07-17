@@ -5,7 +5,7 @@ import {
   ChartBarIcon,
   FireIcon,
   ScaleIcon,
-  FlagIcon,
+  CheckBadgeIcon,
   UserIcon,
   Bars3Icon,
   XMarkIcon,
@@ -16,7 +16,7 @@ import {
   ChartBarIcon as ChartBarSolid,
   FireIcon as FireSolid,
   ScaleIcon as ScaleSolid,
-  FlagIcon as FlagSolid,
+  CheckBadgeIcon as CheckBadgeSolid,
   UserIcon as UserSolid,
   UsersIcon as UsersSolid
 } from '@heroicons/react/24/solid';
@@ -72,11 +72,11 @@ const Layout: React.FC = () => {
       current: location.pathname === '/measurements'
     },
     {
-      name: 'Objectifs',
-      href: '/goals',
-      icon: FlagIcon,
-      iconSolid: FlagSolid,
-      current: location.pathname === '/goals'
+      name: 'Habitudes',
+      href: '/habits',
+      icon: CheckBadgeIcon,
+      iconSolid: CheckBadgeSolid,
+      current: location.pathname === '/habits'
     },
     {
       name: 'Profil',

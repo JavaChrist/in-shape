@@ -22,7 +22,7 @@ const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Nutrition = React.lazy(() => import('./pages/Nutrition'));
 const Exercise = React.lazy(() => import('./pages/Exercise'));
 const Measurements = React.lazy(() => import('./pages/Measurements'));
-const Goals = React.lazy(() => import('./pages/Goals'));
+const Habits = React.lazy(() => import('./pages/Habits'));
 const Profile = React.lazy(() => import('./pages/Profile'));
 const CoachDashboard = React.lazy(() => import('./pages/coach/CoachDashboard'));
 const StudentManagement = React.lazy(() => import('./pages/coach/StudentManagement'));
@@ -139,11 +139,12 @@ function App() {
                   <Measurements />
                 </Suspense>
               } />
-              <Route path="/goals" element={
-                <Suspense fallback={<PageLoader message="Chargement des objectifs..." />}>
-                  <Goals />
+              <Route path="/habits" element={
+                <Suspense fallback={<PageLoader message="Chargement des habitudes..." />}>
+                  <Habits />
                 </Suspense>
               } />
+
               <Route path="/profile" element={
                 <Suspense fallback={<PageLoader message="Chargement du profil..." />}>
                   <Profile />
