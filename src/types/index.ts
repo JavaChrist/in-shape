@@ -11,16 +11,19 @@ export interface User {
 
 export interface Student extends User {
   role: 'student';
-  coachId: string;
-  personalInfo: PersonalInfo;
+  coachId?: string; // ID du coach assigné
+  coachEmail?: string; // Email du coach pour validation
+  personalInfo?: PersonalInfo;
   currentProgram?: string;
-  programs: string[];
+  programs?: string[];
 }
 
 export interface Coach extends User {
   role: 'coach';
-  students: string[];
-  programs: string[];
+  students?: string[]; // IDs des élèves assignés
+  programs?: string[];
+  isVerified?: boolean; // Coach vérifié par admin
+  coachCode?: string; // Code unique pour que les élèves se connectent
 }
 
 // Informations personnelles

@@ -1,8 +1,13 @@
-import React, { useState } from 'react';
-import { CalendarIcon, CameraIcon, CalculatorIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect } from 'react';
+import { CalendarIcon, CameraIcon, CalculatorIcon, ChartBarIcon, ScaleIcon, PencilIcon, TrashIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import { useAuthStore } from '../store/useAuthStore';
+import toast from 'react-hot-toast';
 
 interface MeasurementData {
+  id: string;
   date: string;
   biceps: number;
   triceps: number;
@@ -12,18 +17,83 @@ interface MeasurementData {
   massGrasse: number;
 }
 
+interface WeightEntry {
+  id: string;
+  date: string;
+  weight: number;
+  note?: string;
+}
+
 const Measurements: React.FC = () => {
+  const { user, updateProfile } = useAuthStore();
   const [measurements, setMeasurements] = useState<MeasurementData[]>([]);
+  const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
   const [currentMeasurement, setCurrentMeasurement] = useState({
     biceps: 0,
     triceps: 0,
     souScapulaire: 0,
     supraIliaque: 0
   });
+  const [currentWeight, setCurrentWeight] = useState({
+    weight: 0,
+    note: ''
+  });
   const [userInfo, setUserInfo] = useState({
     age: 30,
     gender: 'homme' as 'homme' | 'femme'
   });
+  const [isLoading, setIsLoading] = useState(true);
+  const [editingWeightId, setEditingWeightId] = useState<string | null>(null);
+  const [editingMeasurementId, setEditingMeasurementId] = useState<string | null>(null);
+  const [editWeightForm, setEditWeightForm] = useState<WeightEntry | null>(null);
+  const [editMeasurementForm, setEditMeasurementForm] = useState<MeasurementData | null>(null);
+
+  // Charger les données utilisateur depuis Firebase
+  useEffect(() => {
+    const loadUserData = async () => {
+      if (!user?.id) return;
+
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.id));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+
+          // Charger l'âge et autres infos du profil
+          if (userData.personalInfo) {
+            setUserInfo(prev => ({
+              ...prev,
+              age: userData.personalInfo.age || 30
+            }));
+
+            // Initialiser le poids actuel
+            if (userData.personalInfo.poidsActuel) {
+              setCurrentWeight(prev => ({
+                ...prev,
+                weight: userData.personalInfo.poidsActuel
+              }));
+            }
+          }
+
+          // Charger les mesures existantes
+          if (userData.measurements) {
+            setMeasurements(userData.measurements);
+          }
+
+          // Charger les pesées existantes
+          if (userData.weightEntries) {
+            setWeightEntries(userData.weightEntries);
+          }
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des données:', error);
+        toast.error('Erreur lors du chargement des données');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadUserData();
+  }, [user]);
 
   // Helper function pour gérer l'erreur de chargement d'image
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
@@ -85,28 +155,251 @@ const Measurements: React.FC = () => {
     }));
   };
 
-  const addMeasurement = () => {
-    const totalPlis = currentMeasurement.biceps + currentMeasurement.triceps +
-      currentMeasurement.souScapulaire + currentMeasurement.supraIliaque;
+  const addMeasurement = async () => {
+    if (!user?.id) return;
 
-    const massGrasse = calculateBodyFat(totalPlis, userInfo.age, userInfo.gender);
+    try {
+      const totalPlis = currentMeasurement.biceps + currentMeasurement.triceps +
+        currentMeasurement.souScapulaire + currentMeasurement.supraIliaque;
 
-    const newMeasurement: MeasurementData = {
-      date: new Date().toLocaleDateString('fr-FR'),
-      ...currentMeasurement,
-      totalPlis,
-      massGrasse: Math.round(massGrasse * 10) / 10
-    };
+      const massGrasse = calculateBodyFat(totalPlis, userInfo.age, userInfo.gender);
 
-    setMeasurements(prev => [...prev, newMeasurement]);
+      const newMeasurement: MeasurementData = {
+        id: Date.now().toString(),
+        date: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+        ...currentMeasurement,
+        totalPlis: Math.round(totalPlis * 100) / 100, // 2 décimales
+        massGrasse: Math.round(massGrasse * 10) / 10
+      };
 
-    // Reset du formulaire
-    setCurrentMeasurement({
-      biceps: 0,
-      triceps: 0,
-      souScapulaire: 0,
-      supraIliaque: 0
-    });
+      const updatedMeasurements = [...measurements, newMeasurement];
+
+      // Sauvegarder dans Firestore
+      await updateDoc(doc(db, 'users', user.id), {
+        measurements: updatedMeasurements,
+        updatedAt: new Date().toISOString()
+      });
+
+      setMeasurements(updatedMeasurements);
+
+      // Reset du formulaire
+      setCurrentMeasurement({
+        biceps: 0,
+        triceps: 0,
+        souScapulaire: 0,
+        supraIliaque: 0
+      });
+
+      toast.success('Mesure enregistrée !');
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde:', error);
+      toast.error('Erreur lors de la sauvegarde');
+    }
+  };
+
+  const addWeightEntry = async () => {
+    if (!user?.id || !currentWeight.weight) return;
+
+    try {
+      const newWeightEntry: WeightEntry = {
+        id: Date.now().toString(),
+        date: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+        weight: currentWeight.weight,
+        note: currentWeight.note || ''
+      };
+
+      const updatedWeightEntries = [...weightEntries, newWeightEntry];
+
+      // Mettre à jour le profil avec le nouveau poids actuel
+      const updatedPersonalInfo = {
+        poidsActuel: currentWeight.weight
+      };
+
+      // Sauvegarder dans Firestore
+      await updateDoc(doc(db, 'users', user.id), {
+        weightEntries: updatedWeightEntries,
+        'personalInfo.poidsActuel': currentWeight.weight,
+        updatedAt: new Date().toISOString()
+      });
+
+      setWeightEntries(updatedWeightEntries);
+
+      // Mettre à jour le store global
+      updateProfile({ updatedAt: new Date() });
+
+      // Reset du formulaire
+      setCurrentWeight({
+        weight: currentWeight.weight, // Garder le poids pour la prochaine pesée
+        note: ''
+      });
+
+      toast.success('Pesée enregistrée ! Le profil a été mis à jour.');
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde de la pesée:', error);
+      toast.error('Erreur lors de la sauvegarde');
+    }
+  };
+
+  // Fonctions d'édition pour les pesées
+  const startEditWeight = (entry: WeightEntry) => {
+    setEditingWeightId(entry.id);
+    setEditWeightForm({ ...entry });
+  };
+
+  const cancelEditWeight = () => {
+    setEditingWeightId(null);
+    setEditWeightForm(null);
+  };
+
+  const saveEditWeight = async () => {
+    if (!user?.id || !editWeightForm) return;
+
+    try {
+      const updatedWeightEntries = weightEntries.map(entry =>
+        entry.id === editWeightForm.id ? editWeightForm : entry
+      );
+
+      // Si c'est la dernière pesée, mettre à jour le profil
+      const latestWeight = updatedWeightEntries[updatedWeightEntries.length - 1];
+      if (editWeightForm.id === latestWeight.id) {
+        await updateDoc(doc(db, 'users', user.id), {
+          weightEntries: updatedWeightEntries,
+          'personalInfo.poidsActuel': editWeightForm.weight,
+          updatedAt: new Date().toISOString()
+        });
+        updateProfile({ updatedAt: new Date() });
+      } else {
+        await updateDoc(doc(db, 'users', user.id), {
+          weightEntries: updatedWeightEntries,
+          updatedAt: new Date().toISOString()
+        });
+      }
+
+      setWeightEntries(updatedWeightEntries);
+      setEditingWeightId(null);
+      setEditWeightForm(null);
+      toast.success('Pesée modifiée !');
+    } catch (error) {
+      console.error('Erreur lors de la modification:', error);
+      toast.error('Erreur lors de la modification');
+    }
+  };
+
+  const deleteWeight = async (id: string) => {
+    if (!user?.id || !window.confirm('Êtes-vous sûr de vouloir supprimer cette pesée ?')) return;
+
+    try {
+      const updatedWeightEntries = weightEntries.filter(entry => entry.id !== id);
+
+      // Si on supprime la dernière pesée, mettre à jour le profil avec l'avant-dernière
+      const wasLatest = weightEntries[weightEntries.length - 1]?.id === id;
+      if (wasLatest && updatedWeightEntries.length > 0) {
+        const newLatestWeight = updatedWeightEntries[updatedWeightEntries.length - 1].weight;
+        await updateDoc(doc(db, 'users', user.id), {
+          weightEntries: updatedWeightEntries,
+          'personalInfo.poidsActuel': newLatestWeight,
+          updatedAt: new Date().toISOString()
+        });
+        updateProfile({ updatedAt: new Date() });
+      } else {
+        await updateDoc(doc(db, 'users', user.id), {
+          weightEntries: updatedWeightEntries,
+          updatedAt: new Date().toISOString()
+        });
+      }
+
+      setWeightEntries(updatedWeightEntries);
+      toast.success('Pesée supprimée !');
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
+      toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  // Fonctions d'édition pour les mesures
+  const startEditMeasurement = (measurement: MeasurementData) => {
+    setEditingMeasurementId(measurement.id);
+    setEditMeasurementForm({ ...measurement });
+  };
+
+  const cancelEditMeasurement = () => {
+    setEditingMeasurementId(null);
+    setEditMeasurementForm(null);
+  };
+
+  const saveEditMeasurement = async () => {
+    if (!user?.id || !editMeasurementForm) return;
+
+    try {
+      // Recalculer les totaux
+      const totalPlis = editMeasurementForm.biceps + editMeasurementForm.triceps +
+        editMeasurementForm.souScapulaire + editMeasurementForm.supraIliaque;
+      const massGrasse = calculateBodyFat(totalPlis, userInfo.age, userInfo.gender);
+
+      const updatedMeasurement = {
+        ...editMeasurementForm,
+        totalPlis: Math.round(totalPlis * 100) / 100, // 2 décimales
+        massGrasse: Math.round(massGrasse * 10) / 10
+      };
+
+      const updatedMeasurements = measurements.map(measurement =>
+        measurement.id === editMeasurementForm.id ? updatedMeasurement : measurement
+      );
+
+      await updateDoc(doc(db, 'users', user.id), {
+        measurements: updatedMeasurements,
+        updatedAt: new Date().toISOString()
+      });
+
+      setMeasurements(updatedMeasurements);
+      setEditingMeasurementId(null);
+      setEditMeasurementForm(null);
+      toast.success('Mesure modifiée !');
+    } catch (error) {
+      console.error('Erreur lors de la modification:', error);
+      toast.error('Erreur lors de la modification');
+    }
+  };
+
+  const deleteMeasurement = async (id: string) => {
+    if (!user?.id || !window.confirm('Êtes-vous sûr de vouloir supprimer cette mesure ?')) return;
+
+    try {
+      const updatedMeasurements = measurements.filter(measurement => measurement.id !== id);
+
+      await updateDoc(doc(db, 'users', user.id), {
+        measurements: updatedMeasurements,
+        updatedAt: new Date().toISOString()
+      });
+
+      setMeasurements(updatedMeasurements);
+      toast.success('Mesure supprimée !');
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
+      toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  // Fonction pour formater la date au format jour/mois
+  const formatDateForChart = (dateString: string) => {
+    // Si la date est déjà au format JJ/MM, on la retourne telle quelle
+    if (dateString.match(/^\d{2}\/\d{2}$/)) {
+      return dateString;
+    }
+    // Si la date est au format complet JJ/MM/AAAA, on extrait JJ/MM
+    if (dateString.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+      return dateString.substring(0, 5);
+    }
+    // Sinon, on essaie de parser et reformater
+    try {
+      const parts = dateString.split('/');
+      if (parts.length >= 2) {
+        return `${parts[0]}/${parts[1]}`;
+      }
+    } catch (error) {
+      console.warn('Format de date non reconnu:', dateString);
+    }
+    return dateString;
   };
 
   return (
@@ -126,6 +419,175 @@ const Measurements: React.FC = () => {
             day: 'numeric'
           })}</span>
         </div>
+      </div>
+
+      {/* Section Pesée */}
+      <div className="card">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+          <ScaleIcon className="h-5 w-5 mr-2" />
+          Pesée hebdomadaire
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Poids actuel (kg)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              value={currentWeight.weight || ''}
+              onChange={(e) => setCurrentWeight(prev => ({ ...prev, weight: parseFloat(e.target.value) || 0 }))}
+              className="input-field"
+              placeholder="0.0"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Note (optionnel)
+            </label>
+            <input
+              type="text"
+              value={currentWeight.note}
+              onChange={(e) => setCurrentWeight(prev => ({ ...prev, note: e.target.value }))}
+              className="input-field"
+              placeholder="Commentaire sur la pesée..."
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-4 mb-4">
+          <button
+            onClick={addWeightEntry}
+            className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              width: 'auto',
+              padding: '0.375rem 1rem',
+              height: '38px',
+              border: 'none',
+              fontSize: '14px'
+            }}
+            disabled={!currentWeight.weight}
+          >
+            Enregistrer la pesée
+          </button>
+
+          {weightEntries.length > 0 && (
+            <div className="bg-blue-50 rounded-lg border border-blue-200 flex items-center justify-center" style={{ height: '38px', padding: '0 16px', minWidth: '200px' }}>
+              <p className="text-sm font-medium text-blue-900 whitespace-nowrap text-center">
+                Dernière pesée: {weightEntries[weightEntries.length - 1]?.weight} kg - {weightEntries[weightEntries.length - 1]?.date}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Graphique d'évolution du poids */}
+        {weightEntries.length > 1 && (
+          <div className="mb-4">
+            <h4 className="text-md font-medium text-gray-900 mb-2">Évolution du poids</h4>
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={weightEntries.map(w => ({ ...w, date: formatDateForChart(w.date) }))} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" tick={{ dy: 10 }} height={60} />
+                  <YAxis domain={['dataMin - 1', 'dataMax + 1']} />
+                  <Tooltip
+                    formatter={(value) => [`${value} kg`, 'Poids']}
+                    labelFormatter={(label) => `Date: ${label}`}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="weight"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
+                    name="Poids (kg)"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
+        {/* Historique des pesées */}
+        {weightEntries.length > 0 && (
+          <div>
+            <h4 className="text-md font-medium text-gray-900 mb-2">Historique des pesées</h4>
+            <div className="max-h-60 overflow-y-auto">
+              <div className="space-y-2">
+                {weightEntries.slice().reverse().map((entry) => (
+                  <div key={entry.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
+                    {editingWeightId === entry.id ? (
+                      // Mode édition
+                      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={editWeightForm?.weight || ''}
+                          onChange={(e) => setEditWeightForm(prev => prev ? { ...prev, weight: parseFloat(e.target.value) || 0 } : null)}
+                          className="input-field text-sm"
+                          placeholder="Poids"
+                        />
+                        <input
+                          type="text"
+                          value={editWeightForm?.note || ''}
+                          onChange={(e) => setEditWeightForm(prev => prev ? { ...prev, note: e.target.value } : null)}
+                          className="input-field text-sm"
+                          placeholder="Note"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={saveEditWeight}
+                            className="p-1 text-green-600 hover:text-green-800 bg-transparent border-none"
+                            style={{ background: 'transparent', border: 'none', outline: 'none' }}
+                            title="Sauvegarder"
+                          >
+                            <CheckIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={cancelEditWeight}
+                            className="p-1 text-red-600 hover:text-red-800 bg-transparent border-none"
+                            style={{ background: 'transparent', border: 'none', outline: 'none' }}
+                            title="Annuler"
+                          >
+                            <XMarkIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      // Mode affichage
+                      <>
+                        <div className="flex-1">
+                          <span className="font-medium">{entry.weight} kg</span>
+                          {entry.note && <span className="text-sm text-gray-600 ml-2">- {entry.note}</span>}
+                          <div className="text-xs text-gray-500">{entry.date}</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => startEditWeight(entry)}
+                            className="p-1 text-blue-600 hover:text-blue-800 bg-transparent border-none"
+                            style={{ background: 'transparent', border: 'none', outline: 'none' }}
+                            title="Modifier"
+                          >
+                            <PencilIcon className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteWeight(entry.id)}
+                            className="p-1 text-red-600 hover:text-red-800 bg-transparent border-none"
+                            style={{ background: 'transparent', border: 'none', outline: 'none' }}
+                            title="Supprimer"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Saisie des mesures */}
@@ -230,7 +692,7 @@ const Measurements: React.FC = () => {
             <p className="text-sm font-medium text-blue-900">Total des 4 plis</p>
             <p className="text-2xl font-bold text-blue-600">
               {(currentMeasurement.biceps + currentMeasurement.triceps +
-                currentMeasurement.souScapulaire + currentMeasurement.supraIliaque).toFixed(1)} mm
+                currentMeasurement.souScapulaire + currentMeasurement.supraIliaque).toFixed(2)} mm
             </p>
           </div>
           <div className="bg-green-50 p-4 rounded-lg border border-green-200">
@@ -249,6 +711,7 @@ const Measurements: React.FC = () => {
         <button
           onClick={addMeasurement}
           className="btn-primary"
+          style={{ width: 'auto', padding: '0.375rem 1rem' }}
           disabled={!currentMeasurement.biceps && !currentMeasurement.triceps &&
             !currentMeasurement.souScapulaire && !currentMeasurement.supraIliaque}
         >
@@ -266,9 +729,9 @@ const Measurements: React.FC = () => {
 
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={measurements}>
+              <LineChart data={measurements.map(m => ({ ...m, date: formatDateForChart(m.date) }))} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
+                <XAxis dataKey="date" tick={{ dy: 10 }} height={60} />
                 <YAxis domain={['dataMin - 1', 'dataMax + 1']} />
                 <Tooltip
                   formatter={(value) => [`${value}%`, 'Masse grasse']}
@@ -319,32 +782,132 @@ const Measurements: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Masse grasse (%)
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {measurements.map((measurement, index) => (
-                  <tr key={index}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {measurement.date}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {measurement.biceps}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {measurement.triceps}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {measurement.souScapulaire}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {measurement.supraIliaque}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {measurement.totalPlis}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600">
-                      {measurement.massGrasse}%
-                    </td>
+                {measurements.map((measurement) => (
+                  <tr key={measurement.id}>
+                    {editingMeasurementId === measurement.id ? (
+                      // Mode édition
+                      <>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {measurement.date}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={editMeasurementForm?.biceps || ''}
+                            onChange={(e) => setEditMeasurementForm(prev => prev ? { ...prev, biceps: parseFloat(e.target.value) || 0 } : null)}
+                            className="w-16 px-2 py-1 text-sm border border-gray-300 rounded"
+                          />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={editMeasurementForm?.triceps || ''}
+                            onChange={(e) => setEditMeasurementForm(prev => prev ? { ...prev, triceps: parseFloat(e.target.value) || 0 } : null)}
+                            className="w-16 px-2 py-1 text-sm border border-gray-300 rounded"
+                          />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={editMeasurementForm?.souScapulaire || ''}
+                            onChange={(e) => setEditMeasurementForm(prev => prev ? { ...prev, souScapulaire: parseFloat(e.target.value) || 0 } : null)}
+                            className="w-16 px-2 py-1 text-sm border border-gray-300 rounded"
+                          />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={editMeasurementForm?.supraIliaque || ''}
+                            onChange={(e) => setEditMeasurementForm(prev => prev ? { ...prev, supraIliaque: parseFloat(e.target.value) || 0 } : null)}
+                            className="w-16 px-2 py-1 text-sm border border-gray-300 rounded"
+                          />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {editMeasurementForm ? (editMeasurementForm.biceps + editMeasurementForm.triceps + editMeasurementForm.souScapulaire + editMeasurementForm.supraIliaque).toFixed(2) : '0.00'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600">
+                          {editMeasurementForm ? calculateBodyFat(
+                            editMeasurementForm.biceps + editMeasurementForm.triceps + editMeasurementForm.souScapulaire + editMeasurementForm.supraIliaque,
+                            userInfo.age, userInfo.gender
+                          ).toFixed(1) : 0}%
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={saveEditMeasurement}
+                              className="p-1 text-green-600 hover:text-green-800 bg-transparent border-none"
+                              style={{ background: 'transparent', border: 'none', outline: 'none' }}
+                              title="Sauvegarder"
+                            >
+                              <CheckIcon className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={cancelEditMeasurement}
+                              className="p-1 text-red-600 hover:text-red-800 bg-transparent border-none"
+                              style={{ background: 'transparent', border: 'none', outline: 'none' }}
+                              title="Annuler"
+                            >
+                              <XMarkIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      // Mode affichage
+                      <>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {measurement.date}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {measurement.biceps}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {measurement.triceps}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {measurement.souScapulaire}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {measurement.supraIliaque}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {measurement.totalPlis.toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600">
+                          {measurement.massGrasse}%
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => startEditMeasurement(measurement)}
+                              className="p-1 text-blue-600 hover:text-blue-800 bg-transparent border-none"
+                              style={{ background: 'transparent', border: 'none', outline: 'none' }}
+                              title="Modifier"
+                            >
+                              <PencilIcon className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteMeasurement(measurement.id)}
+                              className="p-1 text-red-600 hover:text-red-800 bg-transparent border-none"
+                              style={{ background: 'transparent', border: 'none', outline: 'none' }}
+                              title="Supprimer"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -378,7 +941,7 @@ const Measurements: React.FC = () => {
                 </div>
               </div>
               <div className="flex-1">
-                <h4 className="font-medium text-yellow-800 mb-2">📏 Biceps (en mm)</h4>
+                <h4 className="font-medium text-yellow-800 mb-2">Biceps (en mm)</h4>
                 <p className="text-sm text-yellow-700">
                   <strong>Vertical</strong> / sur le biceps à mi distance entre le pit du coude et l'avant de l'épaule
                 </p>
@@ -402,7 +965,7 @@ const Measurements: React.FC = () => {
                 </div>
               </div>
               <div className="flex-1">
-                <h4 className="font-medium text-orange-800 mb-2">📏 Triceps (en mm)</h4>
+                <h4 className="font-medium text-orange-800 mb-2">Triceps (en mm)</h4>
                 <p className="text-sm text-orange-700">
                   <strong>Vertical</strong> / sur le triceps à mi distance entre le pit du coude et l'arrière de l'épaule
                 </p>
@@ -426,7 +989,7 @@ const Measurements: React.FC = () => {
                 </div>
               </div>
               <div className="flex-1">
-                <h4 className="font-medium text-green-800 mb-2">📏 Région sous scapulaire (en mm)</h4>
+                <h4 className="font-medium text-green-800 mb-2">Région sous scapulaire (en mm)</h4>
                 <p className="text-sm text-green-700">
                   <strong>En oblique</strong> vers le bas et l'extérieur / en dessous sous la pointe de l'omoplate
                 </p>
@@ -450,7 +1013,7 @@ const Measurements: React.FC = () => {
                 </div>
               </div>
               <div className="flex-1">
-                <h4 className="font-medium text-purple-800 mb-2">📏 Supra iliaque (en mm)</h4>
+                <h4 className="font-medium text-purple-800 mb-2">Supra iliaque (en mm)</h4>
                 <p className="text-sm text-purple-700">
                   <strong>En oblique</strong> vers le bas et l'intérieur / environ 2 cm au-dessus de la crête iliaque
                 </p>
@@ -460,7 +1023,7 @@ const Measurements: React.FC = () => {
         </div>
 
         <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-          <h4 className="font-medium text-blue-800 mb-2">📈 Calcul automatique</h4>
+          <h4 className="font-medium text-blue-800 mb-2">Calcul automatique</h4>
           <p className="text-sm text-blue-700">
             Le taux de masse grasse est calculé automatiquement selon la formule de Durnin & Womersley.
             Plus vous effectuez de mesures régulières, plus le graphique d'évolution sera précis pour suivre vos progrès !
@@ -473,13 +1036,13 @@ const Measurements: React.FC = () => {
       {/* Tableau technique des coefficients */}
       <div className="card">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          🔬 Coefficients techniques - Formule Durnin & Womersley
+          Coefficients techniques - Formule Durnin & Womersley
         </h3>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Hommes */}
           <div>
-            <h4 className="font-medium text-blue-900 mb-3 text-center">👨 Hommes</h4>
+            <h4 className="font-medium text-blue-900 mb-3 text-center">Hommes</h4>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 border border-gray-300">
                 <thead className="bg-blue-50">
@@ -528,7 +1091,7 @@ const Measurements: React.FC = () => {
 
           {/* Femmes */}
           <div>
-            <h4 className="font-medium text-pink-900 mb-3 text-center">👩 Femmes</h4>
+            <h4 className="font-medium text-pink-900 mb-3 text-center">Femmes</h4>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 border border-gray-300">
                 <thead className="bg-pink-50">
@@ -577,7 +1140,7 @@ const Measurements: React.FC = () => {
         </div>
 
         <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <h4 className="font-medium text-blue-800 mb-2">📐 Formule utilisée</h4>
+          <h4 className="font-medium text-blue-800 mb-2">Formule utilisée</h4>
           <p className="text-sm text-blue-700 mb-2">
             <strong>Densité corporelle = C - (M × log₁₀(somme des 4 plis))</strong>
           </p>

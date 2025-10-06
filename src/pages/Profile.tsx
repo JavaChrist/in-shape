@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { UserIcon, PhoneIcon, EnvelopeIcon, CalendarIcon, ScaleIcon, ChatBubbleLeftRightIcon, PencilIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import { useAuthStore } from '../store/useAuthStore';
+// Types importés dans le composant local
+import toast from 'react-hot-toast';
 
-interface PersonalInfo {
+// Utilisation des types globaux depuis src/types/index.ts
+interface ProfilePersonalInfo {
   email: string;
   telephone: string;
   age: number;
@@ -24,27 +30,31 @@ interface Exchange {
   date: string;
   actionCoach: string;
   details: string;
+  coachComment?: string;
+  coachCommentDate?: string;
 }
 
 
 
 const Profile: React.FC = () => {
-  const [personalInfo, setPersonalInfo] = useState<PersonalInfo>({
-    email: 'contact@exemple.fr',
-    telephone: '06.06.06.06',
-    age: 30,
-    poidsActuel: 70.5,
-    taille: 175,
-    tourTaille: 85,
-    imc: 23.0,
+  const { user, updateProfile } = useAuthStore();
+  const [personalInfo, setPersonalInfo] = useState<ProfilePersonalInfo>({
+    email: user?.email || '',
+    telephone: '',
+    age: 0,
+    poidsActuel: 0,
+    taille: 0,
+    tourTaille: 0,
+    imc: 0,
     infoComplementaire: ''
   });
 
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState<PersonalInfo>(personalInfo);
+  const [editForm, setEditForm] = useState<ProfilePersonalInfo>(personalInfo);
   const [showExchangeForm, setShowExchangeForm] = useState(false);
   const [newExchangeText, setNewExchangeText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const [missionTransformation, setMissionTransformation] = useState<MissionTransformation>({
     objectif: "Je veux perdre 50 kg pour retrouver la forme, arrêter de vivre sous antidouleurs, et pouvoir refaire du sport, notamment courir, ce que j'adorais, et réaliser mon rêve : faire du parapente.",
@@ -54,6 +64,38 @@ const Profile: React.FC = () => {
   });
   const [isEditingMission, setIsEditingMission] = useState(false);
   const [editMissionForm, setEditMissionForm] = useState<MissionTransformation>(missionTransformation);
+
+  // Charger les données utilisateur depuis Firebase
+  useEffect(() => {
+    const loadUserData = async () => {
+      if (!user?.id) return;
+
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.id));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.personalInfo) {
+            setPersonalInfo(prev => ({
+              ...prev,
+              ...userData.personalInfo,
+              email: user.email
+            }));
+          }
+          if (userData.missionTransformation) {
+            setMissionTransformation(userData.missionTransformation);
+          }
+          if (userData.exchanges) {
+            setExchanges(userData.exchanges);
+          }
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des données utilisateur:', error);
+        toast.error('Erreur lors du chargement des données');
+      }
+    };
+
+    loadUserData();
+  }, [user]);
 
   // Calcul automatique de l'IMC
   useEffect(() => {
@@ -69,26 +111,64 @@ const Profile: React.FC = () => {
     setIsEditing(true);
   };
 
-  const handleSave = () => {
-    setPersonalInfo(editForm);
-    setIsEditing(false);
+  const handleSave = async () => {
+    if (!user?.id) return;
+
+    setIsLoading(true);
+    try {
+      // Sauvegarder dans Firestore
+      await updateDoc(doc(db, 'users', user.id), {
+        personalInfo: editForm,
+        updatedAt: new Date().toISOString()
+      });
+
+      // Mettre à jour le state local
+      setPersonalInfo(editForm);
+      setIsEditing(false);
+
+      // Mettre à jour le store global
+      updateProfile({ updatedAt: new Date() });
+
+      toast.success('Informations personnelles sauvegardées !');
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde:', error);
+      toast.error('Erreur lors de la sauvegarde');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleInputChange = (field: keyof PersonalInfo, value: string | number) => {
+  const handleInputChange = (field: keyof ProfilePersonalInfo, value: string | number) => {
     setEditForm(prev => ({ ...prev, [field]: value }));
   };
 
-  const addExchange = () => {
-    if (newExchangeText.trim()) {
+  const addExchange = async () => {
+    if (!newExchangeText.trim() || !user?.id) return;
+
+    try {
       const newExchange: Exchange = {
         id: Date.now().toString(),
         date: new Date().toLocaleDateString('fr-FR'),
         actionCoach: newExchangeText.trim(),
         details: ''
       };
-      setExchanges(prev => [...prev, newExchange]);
+
+      const updatedExchanges = [...exchanges, newExchange];
+
+      // Sauvegarder dans Firestore
+      await updateDoc(doc(db, 'users', user.id), {
+        exchanges: updatedExchanges,
+        updatedAt: new Date().toISOString()
+      });
+
+      setExchanges(updatedExchanges);
       setNewExchangeText('');
       setShowExchangeForm(false);
+
+      toast.success('Échange ajouté !');
+    } catch (error) {
+      console.error('Erreur lors de l\'ajout de l\'échange:', error);
+      toast.error('Erreur lors de l\'ajout');
     }
   };
 
@@ -102,9 +182,24 @@ const Profile: React.FC = () => {
     setIsEditingMission(true);
   };
 
-  const handleSaveMission = () => {
-    setMissionTransformation(editMissionForm);
-    setIsEditingMission(false);
+  const handleSaveMission = async () => {
+    if (!user?.id) return;
+
+    try {
+      // Sauvegarder dans Firestore
+      await updateDoc(doc(db, 'users', user.id), {
+        missionTransformation: editMissionForm,
+        updatedAt: new Date().toISOString()
+      });
+
+      setMissionTransformation(editMissionForm);
+      setIsEditingMission(false);
+
+      toast.success('Mission transformation sauvegardée !');
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde de la mission:', error);
+      toast.error('Erreur lors de la sauvegarde');
+    }
   };
 
   const handleMissionInputChange = (field: keyof MissionTransformation, value: string) => {
@@ -128,7 +223,7 @@ const Profile: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Profil Personnel</h1>
-          <p className="text-gray-600">Présentation de votre espace drive - PAPA IN SHAPE V</p>
+          <p className="text-gray-600">Présentation de votre espace drive - IN SHAPE</p>
         </div>
         <div className="flex items-center space-x-2 text-sm text-gray-500">
           <CalendarIcon className="h-4 w-4" />
@@ -141,6 +236,19 @@ const Profile: React.FC = () => {
         </div>
       </div>
 
+      {/* Code coach pour les coachs */}
+      {user?.role === 'coach' && (user as any).coachCode && (
+        <div className="card bg-blue-50 border border-blue-200">
+          <h3 className="text-lg font-semibold text-blue-900 mb-2">Votre code coach</h3>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-blue-600 mb-2">{(user as any).coachCode}</div>
+            <p className="text-sm text-blue-700">
+              Partagez ce code avec vos élèves pour qu'ils puissent s'inscrire et être liés à votre compte
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Informations personnelles */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
@@ -150,10 +258,11 @@ const Profile: React.FC = () => {
           </h3>
           <button
             onClick={isEditing ? handleSave : handleEdit}
-            className={`btn-sm ${isEditing ? 'btn-primary' : 'btn-secondary'}`}
+            disabled={isLoading}
+            className={`btn-sm ${isEditing ? 'btn-primary' : 'btn-secondary'} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <PencilIcon className="h-4 w-4 mr-1" />
-            {isEditing ? 'Enregistrer' : 'Modifier'}
+            {isLoading ? 'Sauvegarde...' : (isEditing ? 'Enregistrer' : 'Modifier')}
           </button>
         </div>
 
@@ -231,7 +340,7 @@ const Profile: React.FC = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              📏 Taille
+              Taille
             </label>
             {isEditing ? (
               <input
@@ -247,7 +356,7 @@ const Profile: React.FC = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              📐 Tour de taille
+              Tour de taille
             </label>
             {isEditing ? (
               <input
@@ -263,7 +372,7 @@ const Profile: React.FC = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              🧮 IMC
+              IMC
             </label>
             <p className={`font-bold ${imcStatus.color}`}>
               {personalInfo.imc}
@@ -275,7 +384,7 @@ const Profile: React.FC = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              ℹ️ Info complémentaire
+              Info complémentaire
             </label>
             {isEditing ? (
               <input
@@ -298,7 +407,7 @@ const Profile: React.FC = () => {
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">
-            🚀 Mission transformation {'>> POUR TE GUIDER'}
+            Mission transformation
           </h3>
           <button
             onClick={isEditingMission ? handleSaveMission : handleEditMission}
@@ -312,7 +421,7 @@ const Profile: React.FC = () => {
         <div className="space-y-6">
           {/* 1. Décris ton objectif */}
           <div className="border border-gray-200 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 mb-3">📋 Décris ton objectif</h4>
+            <h4 className="font-medium text-gray-900 mb-3">Décris ton objectif</h4>
             {isEditingMission ? (
               <textarea
                 value={editMissionForm.objectif}
@@ -332,7 +441,7 @@ const Profile: React.FC = () => {
 
           {/* 2. Pourquoi tu veux atteindre ton objectif */}
           <div className="border border-gray-200 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 mb-3">💭 Note Pourquoi tu veux atteindre ton objectif</h4>
+            <h4 className="font-medium text-gray-900 mb-3">Note Pourquoi tu veux atteindre ton objectif</h4>
             {isEditingMission ? (
               <textarea
                 value={editMissionForm.pourquoi}
@@ -352,7 +461,7 @@ const Profile: React.FC = () => {
 
           {/* 3. Grands avantages */}
           <div className="border border-gray-200 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 mb-3">✨ Quels sont les grands avantages / bénéfices que tu vas retirer de ta perte de poids ?</h4>
+            <h4 className="font-medium text-gray-900 mb-3">Quels sont les grands avantages / bénéfices que tu vas retirer de ta perte de poids ?</h4>
             {isEditingMission ? (
               <textarea
                 value={editMissionForm.avantages}
@@ -372,7 +481,7 @@ const Profile: React.FC = () => {
 
           {/* 4. Changements d'habitudes */}
           <div className="border border-gray-200 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 mb-3">🔄 Quels sont les changements d'habitudes pour atteindre ton objectif ?</h4>
+            <h4 className="font-medium text-gray-900 mb-3">Quels sont les changements d'habitudes pour atteindre ton objectif ?</h4>
             {isEditingMission ? (
               <textarea
                 value={editMissionForm.changements}
@@ -444,12 +553,15 @@ const Profile: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions du coach - Resumé des consultations problématiques
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Commentaire coach
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {exchanges.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={4} className="px-6 py-4 text-center text-gray-500">
                     Aucun échange pour le moment
                   </td>
                 </tr>
@@ -464,6 +576,16 @@ const Profile: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {exchange.actionCoach}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {exchange.coachComment ? (
+                        <div>
+                          <p className="text-blue-700 font-medium">{exchange.coachComment}</p>
+                          <p className="text-xs text-gray-500 mt-1">{exchange.coachCommentDate}</p>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 italic">En attente</span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -486,7 +608,7 @@ const Profile: React.FC = () => {
           </p>
           <div className="flex items-center space-x-2">
             <span className="text-green-300 font-medium">Révision transformation</span>
-            <span className="text-primary-200">{'-> POUR TE CUISINER'}</span>
+            <span className="text-primary-200">Formation avancée</span>
           </div>
         </div>
       </div>

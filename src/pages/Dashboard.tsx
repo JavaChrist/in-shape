@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ChartBarIcon,
   FireIcon,
@@ -8,38 +8,106 @@ import {
   CalendarIcon
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '../store/useAuthStore';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 const Dashboard: React.FC = () => {
   const { user, isCoach } = useAuthStore();
+  const [personalInfo, setPersonalInfo] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Données de demo - à remplacer par de vraies données
+  // Charger les données utilisateur depuis Firebase
+  useEffect(() => {
+    const loadUserData = async () => {
+      if (!user?.id) return;
+
+      setIsLoading(true);
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.id));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.personalInfo) {
+            setPersonalInfo(userData.personalInfo);
+          }
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des données utilisateur:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadUserData();
+  }, [user]);
+
+  // Recharger les données quand l'utilisateur revient sur la page
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user?.id && !isLoading) {
+        // Recharger les données en arrière-plan
+        const loadUserData = async () => {
+          try {
+            const userDoc = await getDoc(doc(db, 'users', user.id));
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              if (userData.personalInfo) {
+                setPersonalInfo(userData.personalInfo);
+              }
+            }
+          } catch (error) {
+            console.error('Erreur lors du rechargement des données:', error);
+          }
+        };
+        loadUserData();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [user, isLoading]);
+
+  // Calcul de l'objectif atteint (exemple basé sur le poids)
+  const calculateGoalProgress = () => {
+    if (!personalInfo || !personalInfo.poidsActuel) return '0%';
+
+    // Exemple : si poids initial 100kg et objectif 80kg, et actuel 90kg
+    // Progress = (100-90)/(100-80) = 10/20 = 50%
+    const initialWeight = personalInfo.poidsActuel + 10; // Estimation
+    const targetWeight = personalInfo.poidsActuel - 10; // Estimation
+    const progress = Math.min(100, Math.max(0,
+      ((initialWeight - personalInfo.poidsActuel) / (initialWeight - targetWeight)) * 100
+    ));
+    return `${Math.round(progress)}%`;
+  };
+
+  // Stats dynamiques basées sur les vraies données
   const stats = [
     {
       name: 'Poids actuel',
-      value: '75.2 kg',
-      change: '-2.3 kg',
+      value: personalInfo?.poidsActuel ? `${personalInfo.poidsActuel} kg` : 'Non renseigné',
+      change: personalInfo?.poidsActuel ? '-2.3 kg' : '',
       changeType: 'positive',
       icon: ScaleIcon,
     },
     {
-      name: 'Objectif atteint',
-      value: '68%',
-      change: '+5%',
+      name: 'IMC',
+      value: personalInfo?.imc ? `${personalInfo.imc}` : 'Non calculé',
+      change: personalInfo?.imc ? 'Normal' : '',
       changeType: 'positive',
       icon: FlagIcon,
     },
     {
-      name: 'Séances cette semaine',
-      value: '4',
-      change: '+1',
-      changeType: 'positive',
+      name: 'Taille',
+      value: personalInfo?.taille ? `${personalInfo.taille} cm` : 'Non renseigné',
+      change: '',
+      changeType: 'neutral',
       icon: FireIcon,
     },
     {
-      name: 'Streak nutrition',
-      value: '12 jours',
-      change: '+2',
-      changeType: 'positive',
+      name: 'Âge',
+      value: personalInfo?.age ? `${personalInfo.age} ans` : 'Non renseigné',
+      change: '',
+      changeType: 'neutral',
       icon: TrophyIcon,
     },
   ];
@@ -76,26 +144,49 @@ const Dashboard: React.FC = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
-          <div key={stat.name} className="card">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">{stat.name}</p>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+        {isLoading ? (
+          // Skeleton loading
+          Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="card animate-pulse">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                  <div className="h-8 bg-gray-200 rounded"></div>
+                </div>
+                <div className="w-8 h-8 bg-gray-200 rounded"></div>
               </div>
-              <div className="flex-shrink-0">
-                <stat.icon className="h-8 w-8 text-primary-500" />
+              <div className="mt-2 flex items-center">
+                <div className="h-4 bg-gray-200 rounded w-16"></div>
               </div>
             </div>
-            <div className="mt-2 flex items-center">
-              <span className={`text-sm font-medium ${stat.changeType === 'positive' ? 'text-green-600' : 'text-red-600'
-                }`}>
-                {stat.change}
-              </span>
-              <span className="text-sm text-gray-500 ml-2">cette semaine</span>
+          ))
+        ) : (
+          stats.map((stat) => (
+            <div key={stat.name} className="card">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">{stat.name}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                </div>
+                <div className="flex-shrink-0">
+                  <stat.icon className="h-8 w-8 text-primary-500" />
+                </div>
+              </div>
+              {stat.change && (
+                <div className="mt-2 flex items-center">
+                  <span className={`text-sm font-medium ${stat.changeType === 'positive' ? 'text-green-600' :
+                      stat.changeType === 'negative' ? 'text-red-600' : 'text-gray-500'
+                    }`}>
+                    {stat.change}
+                  </span>
+                  {stat.changeType !== 'neutral' && (
+                    <span className="text-sm text-gray-500 ml-2">cette semaine</span>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Quick Actions */}
@@ -193,7 +284,7 @@ const Dashboard: React.FC = () => {
       {/* Motivational Quote */}
       <div className="card bg-gradient-to-r from-primary-500 to-blue-600 text-white">
         <div className="text-center">
-          <h3 className="text-xl font-semibold mb-2">💡 Inspiration du jour</h3>
+          <h3 className="text-xl font-semibold mb-2">Inspiration du jour</h3>
           <p className="text-primary-100 italic">
             "Le succès n'est pas final, l'échec n'est pas fatal : c'est le courage de continuer qui compte."
           </p>

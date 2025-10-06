@@ -1,5 +1,9 @@
-import React, { useState } from 'react';
-import { CalendarIcon, ChartBarIcon, ClockIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect } from 'react';
+import { CalendarIcon, ChartBarIcon, ClockIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import { useAuthStore } from '../store/useAuthStore';
+import toast from 'react-hot-toast';
 
 interface NutritionEntry {
   petitDejeuner: string;
@@ -8,6 +12,11 @@ interface NutritionEntry {
   diner: string;
   eauBoissons: string;
   alcool: string;
+}
+
+interface SommeilEntry {
+  coucher: string;
+  reveil: string;
 }
 
 interface WeekData {
@@ -21,19 +30,79 @@ interface WeekData {
     dimanche: NutritionEntry;
   };
   sommeil: {
-    lundi: string;
-    mardi: string;
-    mercredi: string;
-    jeudi: string;
-    vendredi: string;
-    samedi: string;
-    dimanche: string;
+    lundi: SommeilEntry;
+    mardi: SommeilEntry;
+    mercredi: SommeilEntry;
+    jeudi: SommeilEntry;
+    vendredi: SommeilEntry;
+    samedi: SommeilEntry;
+    dimanche: SommeilEntry;
   };
 }
 
 const Nutrition: React.FC = () => {
+  const { user } = useAuthStore();
   const [currentWeek, setCurrentWeek] = useState(1);
   const [weekData, setWeekData] = useState<{ [week: number]: WeekData }>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Charger les données nutrition depuis Firebase
+  useEffect(() => {
+    const loadNutritionData = async () => {
+      if (!user?.id) return;
+
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.id));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.nutritionData) {
+            // Migrer les anciennes données si nécessaire
+            const migratedData = { ...userData.nutritionData };
+
+            Object.keys(migratedData).forEach(week => {
+              const weekData = migratedData[parseInt(week)];
+              if (weekData.sommeil) {
+                Object.keys(weekData.sommeil).forEach(jour => {
+                  let sommeilData: any = weekData.sommeil[jour as keyof typeof weekData.sommeil];
+
+                  // Si c'est une string (ancien format), convertir en objet
+                  if (typeof sommeilData === 'string') {
+                    const match = (sommeilData as string).match(/(\d{1,2}h?\d{0,2})\s*-\s*(\d{1,2}h?\d{0,2})/);
+                    if (match) {
+                      // Convertir format français vers format HTML5
+                      const convertToTimeFormat = (timeStr: string) => {
+                        const cleaned = timeStr.replace('h', ':');
+                        const parts = cleaned.split(':');
+                        const hours = parts[0].padStart(2, '0');
+                        const minutes = parts[1] || '00';
+                        return `${hours}:${minutes.padStart(2, '0')}`;
+                      };
+
+                      const coucher = convertToTimeFormat(match[1]);
+                      const reveil = convertToTimeFormat(match[2]);
+                      (weekData.sommeil as any)[jour] = { coucher, reveil };
+                    } else {
+                      (weekData.sommeil as any)[jour] = { coucher: '', reveil: '' };
+                    }
+                  }
+                });
+              }
+            });
+
+            setWeekData(migratedData);
+          }
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des données nutrition:', error);
+        toast.error('Erreur lors du chargement des données');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadNutritionData();
+  }, [user]);
 
   const jours = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
   const joursLabels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -68,55 +137,157 @@ const Nutrition: React.FC = () => {
           dimanche: { ...emptyNutritionEntry }
         },
         sommeil: {
-          lundi: '',
-          mardi: '',
-          mercredi: '',
-          jeudi: '',
-          vendredi: '',
-          samedi: '',
-          dimanche: ''
+          lundi: { coucher: '', reveil: '' },
+          mardi: { coucher: '', reveil: '' },
+          mercredi: { coucher: '', reveil: '' },
+          jeudi: { coucher: '', reveil: '' },
+          vendredi: { coucher: '', reveil: '' },
+          samedi: { coucher: '', reveil: '' },
+          dimanche: { coucher: '', reveil: '' }
         }
       };
     }
     return weekData[week];
   };
 
-  const updateNutritionEntry = (week: number, jour: string, categorie: string, value: string) => {
-    setWeekData(prev => {
-      const currentData = getWeekData(week);
-      const currentJourData = currentData.nutrition[jour as keyof typeof currentData.nutrition];
+  const cleanDataForFirebase = (data: { [week: number]: WeekData }) => {
+    const cleanedData = { ...data };
 
-      return {
-        ...prev,
-        [week]: {
-          ...currentData,
-          nutrition: {
-            ...currentData.nutrition,
-            [jour]: {
-              ...currentJourData,
-              [categorie]: value
-            }
+    // Nettoyer les valeurs undefined et migrer les anciennes données
+    Object.keys(cleanedData).forEach(week => {
+      const weekData = cleanedData[parseInt(week)];
+
+      // Nettoyer les données de sommeil et migrer si nécessaire
+      Object.keys(weekData.sommeil).forEach(jour => {
+        let sommeilData: any = weekData.sommeil[jour as keyof typeof weekData.sommeil];
+
+        // Si c'est une string (ancien format), convertir en objet
+        if (typeof sommeilData === 'string') {
+          // Essayer de parser l'ancien format "22h45 - 6h00"
+          const match = (sommeilData as string).match(/(\d{1,2}h?\d{0,2})\s*-\s*(\d{1,2}h?\d{0,2})/);
+          if (match) {
+            // Convertir format français vers format HTML5
+            const convertToTimeFormat = (timeStr: string) => {
+              const cleaned = timeStr.replace('h', ':');
+              const parts = cleaned.split(':');
+              const hours = parts[0].padStart(2, '0');
+              const minutes = parts[1] || '00';
+              return `${hours}:${minutes.padStart(2, '0')}`;
+            };
+
+            const coucher = convertToTimeFormat(match[1]);
+            const reveil = convertToTimeFormat(match[2]);
+            sommeilData = { coucher, reveil };
+          } else {
+            sommeilData = { coucher: '', reveil: '' };
           }
+          (weekData.sommeil as any)[jour] = sommeilData;
         }
-      };
+
+        // S'assurer que l'objet a les bonnes propriétés
+        if (typeof sommeilData === 'object' && sommeilData) {
+          if (!sommeilData.coucher) sommeilData.coucher = '';
+          if (!sommeilData.reveil) sommeilData.reveil = '';
+        }
+      });
     });
+
+    return cleanedData;
   };
 
-  const updateSommeilEntry = (week: number, jour: string, value: string) => {
-    setWeekData(prev => {
-      const currentData = getWeekData(week);
+  const saveToFirebase = async (updatedWeekData: { [week: number]: WeekData }) => {
+    if (!user?.id) return;
 
-      return {
-        ...prev,
-        [week]: {
-          ...currentData,
-          sommeil: {
-            ...currentData.sommeil,
-            [jour]: value
-          }
+    setIsSaving(true);
+    try {
+      const cleanedData = cleanDataForFirebase(updatedWeekData);
+      await updateDoc(doc(db, 'users', user.id), {
+        nutritionData: cleanedData,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde nutrition:', error);
+      toast.error('Erreur lors de la sauvegarde');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const updateNutritionEntry = (week: number, jour: string, categorie: string, value: string) => {
+    const updatedWeekData = { ...weekData };
+    const currentData = getWeekData(week);
+    const currentJourData = currentData.nutrition[jour as keyof typeof currentData.nutrition];
+
+    updatedWeekData[week] = {
+      ...currentData,
+      nutrition: {
+        ...currentData.nutrition,
+        [jour]: {
+          ...currentJourData,
+          [categorie]: value
         }
-      };
-    });
+      }
+    };
+
+    setWeekData(updatedWeekData);
+
+    // Sauvegarde automatique avec debounce
+    setTimeout(() => {
+      saveToFirebase(updatedWeekData);
+    }, 1000);
+  };
+
+  const updateSommeilEntry = (week: number, jour: string, field: 'coucher' | 'reveil', value: string) => {
+    const updatedWeekData = { ...weekData };
+    const currentData = getWeekData(week);
+    const currentSommeilData = currentData.sommeil[jour as keyof typeof currentData.sommeil];
+
+    // S'assurer que currentSommeilData existe et a les bonnes propriétés
+    const safeSommeilData = {
+      coucher: currentSommeilData?.coucher || '',
+      reveil: currentSommeilData?.reveil || ''
+    };
+
+    updatedWeekData[week] = {
+      ...currentData,
+      sommeil: {
+        ...currentData.sommeil,
+        [jour]: {
+          ...safeSommeilData,
+          [field]: value || ''
+        }
+      }
+    };
+
+    setWeekData(updatedWeekData);
+
+    // Sauvegarde automatique avec debounce
+    setTimeout(() => {
+      saveToFirebase(updatedWeekData);
+    }, 1000);
+  };
+
+  const setSommeilPreset = (week: number, jour: string, coucher: string, reveil: string) => {
+    const updatedWeekData = { ...weekData };
+    const currentData = getWeekData(week);
+
+    updatedWeekData[week] = {
+      ...currentData,
+      sommeil: {
+        ...currentData.sommeil,
+        [jour]: {
+          coucher: coucher || '',
+          reveil: reveil || ''
+        }
+      }
+    };
+
+    setWeekData(updatedWeekData);
+
+    // Sauvegarde automatique avec debounce
+    setTimeout(() => {
+      saveToFirebase(updatedWeekData);
+    }, 1000);
   };
 
   const currentWeekData = getWeekData(currentWeek);
@@ -145,16 +316,24 @@ const Nutrition: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Suivi Nutrition & Sommeil</h1>
           <p className="text-gray-600">Tableau de suivi hebdomadaire - Semaine {currentWeek}/52</p>
         </div>
-        <div className="flex items-center space-x-2 text-sm text-gray-500">
-          <CalendarIcon className="h-4 w-4" />
-          <span>Semaine {currentWeek}</span>
+        <div className="flex items-center space-x-4">
+          {isSaving && (
+            <div className="flex items-center space-x-2 text-sm text-blue-600">
+              <CloudArrowUpIcon className="h-4 w-4 animate-pulse" />
+              <span>Sauvegarde...</span>
+            </div>
+          )}
+          <div className="flex items-center space-x-2 text-sm text-gray-500">
+            <CalendarIcon className="h-4 w-4" />
+            <span>Semaine {currentWeek}</span>
+          </div>
         </div>
       </div>
 
       {/* Navigation des semaines */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">📅 Navigation par semaines</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Navigation par semaines</h3>
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setCurrentWeek(Math.max(0, currentWeek - 1))}
@@ -189,7 +368,6 @@ const Nutrition: React.FC = () => {
       <div className="card">
         <div className="flex items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-            <span className="mr-2">🍽️</span>
             ALIMENTATION - Semaine {currentWeek}
           </h3>
         </div>
@@ -251,10 +429,10 @@ const Nutrition: React.FC = () => {
             <thead>
               <tr className="bg-blue-50">
                 <th className="border border-gray-300 p-2 text-left font-medium text-gray-900 min-w-[120px]">
-                  Heures de sommeil
+                  Horaires de sommeil
                 </th>
                 {joursLabels.map((jour, index) => (
-                  <th key={jour} className="border border-gray-300 p-2 text-center font-medium text-gray-900 min-w-[100px]">
+                  <th key={jour} className="border border-gray-300 p-2 text-center font-medium text-gray-900 min-w-[120px]">
                     <div>{jour}</div>
                     <div className="text-xs text-gray-500">{weekDates[index]}</div>
                   </th>
@@ -264,19 +442,78 @@ const Nutrition: React.FC = () => {
             <tbody>
               <tr className="bg-blue-50">
                 <td className="border border-gray-300 p-2 font-medium text-gray-900">
-                  Coucher (22h45) / Réveil (6h00)
+                  Heure de coucher
                 </td>
                 {jours.map((jour) => {
-                  const sommeilValue = currentWeekData.sommeil[jour as keyof typeof currentWeekData.sommeil];
+                  const sommeilData = currentWeekData.sommeil[jour as keyof typeof currentWeekData.sommeil];
 
                   return (
                     <td key={jour} className="border border-gray-300 p-1">
-                      <textarea
-                        value={sommeilValue}
-                        onChange={(e) => updateSommeilEntry(currentWeek, jour, e.target.value)}
-                        className="w-full h-16 p-1 text-xs border-0 resize-none focus:outline-none focus:ring-1 focus:ring-primary-500 bg-transparent"
-                        placeholder="Coucher/Réveil..."
-                      />
+                      <div className="space-y-1">
+                        {/* Boutons rapides pour le coucher */}
+                        <div className="flex gap-1 mb-1">
+                          <button
+                            onClick={() => setSommeilPreset(currentWeek, jour, '22:45', sommeilData.reveil || '')}
+                            className="text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-blue-800"
+                            title="22h45"
+                          >
+                            22h45
+                          </button>
+                          <button
+                            onClick={() => setSommeilPreset(currentWeek, jour, '23:00', sommeilData.reveil || '')}
+                            className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-800"
+                            title="23h00"
+                          >
+                            23h
+                          </button>
+                        </div>
+                        {/* Champ manuel */}
+                        <input
+                          type="time"
+                          value={sommeilData.coucher || ''}
+                          onChange={(e) => updateSommeilEntry(currentWeek, jour, 'coucher', e.target.value)}
+                          className="w-full p-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                        />
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+              <tr className="bg-blue-50">
+                <td className="border border-gray-300 p-2 font-medium text-gray-900">
+                  Heure de réveil
+                </td>
+                {jours.map((jour) => {
+                  const sommeilData = currentWeekData.sommeil[jour as keyof typeof currentWeekData.sommeil];
+
+                  return (
+                    <td key={jour} className="border border-gray-300 p-1">
+                      <div className="space-y-1">
+                        {/* Boutons rapides pour le réveil */}
+                        <div className="flex gap-1 mb-1">
+                          <button
+                            onClick={() => setSommeilPreset(currentWeek, jour, sommeilData.coucher || '', '06:00')}
+                            className="text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-blue-800"
+                            title="6h00"
+                          >
+                            6h00
+                          </button>
+                          <button
+                            onClick={() => setSommeilPreset(currentWeek, jour, sommeilData.coucher || '', '06:30')}
+                            className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-800"
+                            title="6h30"
+                          >
+                            6h30
+                          </button>
+                        </div>
+                        {/* Champ manuel */}
+                        <input
+                          type="time"
+                          value={sommeilData.reveil || ''}
+                          onChange={(e) => updateSommeilEntry(currentWeek, jour, 'reveil', e.target.value)}
+                          className="w-full p-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                        />
+                      </div>
                     </td>
                   );
                 })}
@@ -296,7 +533,6 @@ const Nutrition: React.FC = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="p-4 bg-green-50 rounded-lg border border-green-200">
             <div className="text-center">
-              <div className="text-2xl mb-1">🍽️</div>
               <h4 className="font-medium text-gray-900 text-sm mb-2">Alimentation</h4>
               <div className="text-xs text-gray-600">
                 {Object.values(currentWeekData.nutrition).filter(jour =>
@@ -308,11 +544,10 @@ const Nutrition: React.FC = () => {
 
           <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
             <div className="text-center">
-              <div className="text-2xl mb-1">😴</div>
               <h4 className="font-medium text-gray-900 text-sm mb-2">Sommeil</h4>
               <div className="text-xs text-gray-600">
-                {Object.values(currentWeekData.sommeil).filter(horaire =>
-                  horaire.trim() !== ''
+                {Object.values(currentWeekData.sommeil).filter((horaire: any) =>
+                  horaire.coucher?.trim() !== '' && horaire.reveil?.trim() !== ''
                 ).length}/7 jours remplis
               </div>
             </div>
@@ -320,7 +555,6 @@ const Nutrition: React.FC = () => {
 
           <div className="p-4 bg-cyan-50 rounded-lg border border-cyan-200">
             <div className="text-center">
-              <div className="text-2xl mb-1">💧</div>
               <h4 className="font-medium text-gray-900 text-sm mb-2">Hydratation</h4>
               <div className="text-xs text-gray-600">
                 {Object.values(currentWeekData.nutrition).filter(jour =>
@@ -332,7 +566,6 @@ const Nutrition: React.FC = () => {
 
           <div className="p-4 bg-red-50 rounded-lg border border-red-200">
             <div className="text-center">
-              <div className="text-2xl mb-1">🍷</div>
               <h4 className="font-medium text-gray-900 text-sm mb-2">Alcool</h4>
               <div className="text-xs text-gray-600">
                 {Object.values(currentWeekData.nutrition).filter(jour =>

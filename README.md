@@ -1,4 +1,4 @@
-# 🏋️‍♂️ InShape - Papa In Shape V
+# 🏋️‍♂️ InShape
 
 Application React complète de **suivi fitness et coaching personnalisé** remplaçant les tableaux Excel pour un suivi moderne et interactif.
 
@@ -144,21 +144,39 @@ npm install
 
 3. **Configuration Firebase**
 
+**⚠️ Important :** Sans configuration Firebase, l'authentification ne fonctionnera pas.
+
+### Obtenir les clés Firebase :
+
+1. Allez sur [Firebase Console](https://console.firebase.google.com/)
+2. Créez un nouveau projet ou sélectionnez un existant
+3. Allez dans **Paramètres du projet** > **Général**
+4. Dans "Vos applications", cliquez sur l'icône web `</>`
+5. Copiez les valeurs de configuration
+
+### Créer le fichier de configuration :
+
 ```bash
-# Créer le fichier .env.local
-cp .env.example .env.local
+# Créer le fichier .env
+touch .env
 ```
 
-Remplir le fichier `.env.local` avec vos clés Firebase :
+Remplir le fichier `.env` avec vos vraies clés Firebase :
 
 ```env
-REACT_APP_FIREBASE_API_KEY=your_api_key
-REACT_APP_FIREBASE_AUTH_DOMAIN=your_auth_domain
-REACT_APP_FIREBASE_PROJECT_ID=your_project_id
-REACT_APP_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-REACT_APP_FIREBASE_APP_ID=your_app_id
+REACT_APP_FIREBASE_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+REACT_APP_FIREBASE_AUTH_DOMAIN=votre-projet.firebaseapp.com
+REACT_APP_FIREBASE_PROJECT_ID=votre-projet-id
+REACT_APP_FIREBASE_STORAGE_BUCKET=votre-projet.appspot.com
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=123456789012
+REACT_APP_FIREBASE_APP_ID=1:123456789012:web:abcdef123456789
 ```
+
+### Configuration Firestore :
+
+1. Dans Firebase Console, allez dans **Firestore Database**
+2. Créez une base de données en mode **test** ou **production**
+3. Configurez les règles de sécurité selon vos besoins
 
 4. **Lancer l'application**
 
@@ -321,7 +339,7 @@ src/
 
 Pour toute question ou suggestion concernant **InShape** :
 
-- 📧 **Email** : support@papainshape.com
+- 📧 **Email** : support@inshape.com
 - 🐛 **Issues** : [GitHub Issues](https://github.com/votre-repo/in-shape-app/issues)
 - 📖 **Documentation** : [Wiki du projet](https://github.com/votre-repo/in-shape-app/wiki)
 
