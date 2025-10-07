@@ -10,11 +10,13 @@ import {
 import { useAuthStore } from '../store/useAuthStore';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { Link } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
   const { user, isCoach } = useAuthStore();
   const [personalInfo, setPersonalInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // Charger les données utilisateur depuis Firebase
   useEffect(() => {
@@ -30,8 +32,17 @@ const Dashboard: React.FC = () => {
             setPersonalInfo(userData.personalInfo);
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erreur lors du chargement des données utilisateur:', error);
+        console.error('Code d\'erreur:', error.code);
+        console.error('Message:', error.message);
+
+        // Afficher une erreur plus spécifique
+        if (error.code === 'permission-denied') {
+          console.error('❌ Permissions Firestore insuffisantes');
+        } else if (error.code === 'unavailable') {
+          console.error('⚠️ Service Firestore temporairement indisponible');
+        }
       } finally {
         setIsLoading(false);
       }
@@ -54,8 +65,11 @@ const Dashboard: React.FC = () => {
                 setPersonalInfo(userData.personalInfo);
               }
             }
-          } catch (error) {
-            console.error('Erreur lors du rechargement des données:', error);
+          } catch (error: any) {
+            // Mode silencieux pour les erreurs de connexion
+            if (error.code !== 'unavailable' && error.code !== 'failed-precondition') {
+              console.error('Erreur lors du rechargement des données:', error);
+            }
           }
         };
         loadUserData();
@@ -65,6 +79,35 @@ const Dashboard: React.FC = () => {
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [user, isLoading]);
+
+  // Gérer le statut de connexion
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Fonctions pour l'IMC
+  const getIMCStatus = (imc: number) => {
+    if (imc < 18.5) return 'Insuffisance pondérale';
+    if (imc < 25) return 'Poids normal';
+    if (imc < 30) return 'Surpoids';
+    return 'Obésité';
+  };
+
+  const getIMCChangeType = (imc: number): 'positive' | 'negative' | 'neutral' => {
+    if (imc < 18.5) return 'negative';
+    if (imc < 25) return 'positive';
+    if (imc < 30) return 'neutral';
+    return 'negative';
+  };
 
   // Calcul de l'objectif atteint (exemple basé sur le poids)
   const calculateGoalProgress = () => {
@@ -92,8 +135,8 @@ const Dashboard: React.FC = () => {
     {
       name: 'IMC',
       value: personalInfo?.imc ? `${personalInfo.imc}` : 'Non calculé',
-      change: personalInfo?.imc ? 'Normal' : '',
-      changeType: 'positive',
+      change: personalInfo?.imc ? getIMCStatus(personalInfo.imc) : '',
+      changeType: personalInfo?.imc ? getIMCChangeType(personalInfo.imc) : 'neutral',
       icon: FlagIcon,
     },
     {
@@ -131,14 +174,22 @@ const Dashboard: React.FC = () => {
             Bonjour {user?.name} ! Voici votre progression aujourd'hui
           </p>
         </div>
-        <div className="flex items-center space-x-2 text-sm text-gray-500">
-          <CalendarIcon className="h-4 w-4" />
-          <span>{new Date().toLocaleDateString('fr-FR', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          })}</span>
+        <div className="flex items-center space-x-4">
+          {!isOnline && (
+            <div className="flex items-center space-x-1 text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
+              <span>●</span>
+              <span>Mode hors ligne</span>
+            </div>
+          )}
+          <div className="flex items-center space-x-2 text-sm text-gray-500">
+            <CalendarIcon className="h-4 w-4" />
+            <span>{new Date().toLocaleDateString('fr-FR', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}</span>
+          </div>
         </div>
       </div>
 
@@ -175,7 +226,7 @@ const Dashboard: React.FC = () => {
               {stat.change && (
                 <div className="mt-2 flex items-center">
                   <span className={`text-sm font-medium ${stat.changeType === 'positive' ? 'text-green-600' :
-                      stat.changeType === 'negative' ? 'text-red-600' : 'text-gray-500'
+                    stat.changeType === 'negative' ? 'text-red-600' : 'text-gray-500'
                     }`}>
                     {stat.change}
                   </span>
@@ -195,22 +246,34 @@ const Dashboard: React.FC = () => {
         <div className="card">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Actions rapides</h3>
           <div className="grid grid-cols-2 gap-4">
-            <button className="flex flex-col items-center p-4 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors">
-              <ChartBarIcon className="h-8 w-8 text-primary-600 mb-2" />
-              <span className="text-sm font-medium text-primary-900">Nutrition</span>
-            </button>
-            <button className="flex flex-col items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors">
+            <Link
+              to="/nutrition"
+              className="flex flex-col items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+            >
+              <ChartBarIcon className="h-8 w-8 text-blue-600 mb-2" />
+              <span className="text-sm font-medium text-blue-900">Nutrition</span>
+            </Link>
+            <Link
+              to="/exercise"
+              className="flex flex-col items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors"
+            >
               <FireIcon className="h-8 w-8 text-orange-600 mb-2" />
               <span className="text-sm font-medium text-orange-900">Exercice</span>
-            </button>
-            <button className="flex flex-col items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
+            </Link>
+            <Link
+              to="/measurements"
+              className="flex flex-col items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+            >
               <ScaleIcon className="h-8 w-8 text-green-600 mb-2" />
               <span className="text-sm font-medium text-green-900">Pesée</span>
-            </button>
-            <button className="flex flex-col items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
+            </Link>
+            <Link
+              to="/habits"
+              className="flex flex-col items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
+            >
               <FlagIcon className="h-8 w-8 text-purple-600 mb-2" />
-              <span className="text-sm font-medium text-purple-900">Objectifs</span>
-            </button>
+              <span className="text-sm font-medium text-purple-900">Habitudes</span>
+            </Link>
           </div>
         </div>
 

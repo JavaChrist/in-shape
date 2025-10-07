@@ -210,15 +210,27 @@ const Measurements: React.FC = () => {
 
       const updatedWeightEntries = [...weightEntries, newWeightEntry];
 
-      // Mettre à jour le profil avec le nouveau poids actuel
-      const updatedPersonalInfo = {
-        poidsActuel: currentWeight.weight
-      };
+      // Recalculer l'IMC avec le nouveau poids
+      const userDoc = await getDoc(doc(db, 'users', user.id));
+      let updatedPersonalInfo = { poidsActuel: currentWeight.weight };
+
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        if (userData.personalInfo?.taille > 0) {
+          const tailleM = userData.personalInfo.taille / 100;
+          const imc = currentWeight.weight / (tailleM * tailleM);
+          updatedPersonalInfo = {
+            ...userData.personalInfo,
+            poidsActuel: currentWeight.weight,
+            imc: Math.round(imc * 10) / 10
+          };
+        }
+      }
 
       // Sauvegarder dans Firestore
       await updateDoc(doc(db, 'users', user.id), {
         weightEntries: updatedWeightEntries,
-        'personalInfo.poidsActuel': currentWeight.weight,
+        personalInfo: updatedPersonalInfo,
         updatedAt: new Date().toISOString()
       });
 

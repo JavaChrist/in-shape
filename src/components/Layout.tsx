@@ -234,26 +234,28 @@ const Layout: React.FC = () => {
       {/* Main content */}
       <div className="lg:pl-64">
         {/* Top bar mobile */}
-        <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:hidden">
+        <div className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm lg:hidden">
           <button
             type="button"
-            className="-m-2.5 text-gray-700 lg:hidden"
+            className="p-2 text-gray-700 hover:bg-gray-100 rounded-md"
             onClick={() => setSidebarOpen(true)}
+            style={{ width: '40px', height: '40px' }}
           >
             <Bars3Icon className="h-6 w-6" />
           </button>
-          <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
-            <div className="flex items-center gap-x-4 lg:gap-x-6">
-              <img src="/logo192.png" alt="InShape Logo" className="h-6 w-6 mr-2" />
-              <span className="text-xl font-bold text-primary-600">InShape</span>
-            </div>
+          <div className="flex items-center">
+            <img src="/logo192.png" alt="InShape Logo" className="h-8 w-8 mr-2" />
+            <span className="text-xl font-bold text-primary-600">InShape</span>
           </div>
+          <div style={{ width: '40px' }}></div> {/* Spacer pour centrer le logo */}
         </div>
 
         {/* Page content */}
         <main className="py-6">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <Outlet />
+            <div className="min-h-screen">
+              <Outlet />
+            </div>
           </div>
         </main>
       </div>

@@ -12,6 +12,10 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #f8fafc;
+  /* Stabilité mobile */
+  overflow-x: hidden;
+  position: relative;
+  width: 100%;
 }
 
 code {
@@ -236,4 +240,28 @@ button:disabled {
 
 .toast-error {
   background-color: #ef4444;
+}
+
+/* Stabilité mobile PWA */
+@media (max-width: 1023px) {
+  .min-h-screen {
+    min-height: calc(100vh - 64px); /* Hauteur - header mobile */
+  }
+
+  .sticky {
+    position: -webkit-sticky;
+    position: sticky;
+  }
+
+  /* Éviter le défilement horizontal */
+  * {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Stabiliser les tableaux sur mobile */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
 }

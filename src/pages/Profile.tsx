@@ -116,14 +116,22 @@ const Profile: React.FC = () => {
 
     setIsLoading(true);
     try {
+      // Calculer l'IMC avant sauvegarde
+      let finalForm = { ...editForm };
+      if (editForm.taille > 0 && editForm.poidsActuel > 0) {
+        const tailleM = editForm.taille / 100;
+        const imc = editForm.poidsActuel / (tailleM * tailleM);
+        finalForm.imc = Math.round(imc * 10) / 10;
+      }
+
       // Sauvegarder dans Firestore
       await updateDoc(doc(db, 'users', user.id), {
-        personalInfo: editForm,
+        personalInfo: finalForm,
         updatedAt: new Date().toISOString()
       });
 
       // Mettre à jour le state local
-      setPersonalInfo(editForm);
+      setPersonalInfo(finalForm);
       setIsEditing(false);
 
       // Mettre à jour le store global
