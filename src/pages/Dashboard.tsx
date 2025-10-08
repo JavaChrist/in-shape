@@ -5,18 +5,25 @@ import {
   ScaleIcon,
   FlagIcon,
   TrophyIcon,
-  CalendarIcon
+  CalendarIcon,
+  ChatBubbleLeftRightIcon,
+  PlusIcon
 } from '@heroicons/react/24/outline';
 import { useAuthStore } from '../store/useAuthStore';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 const Dashboard: React.FC = () => {
   const { user, isCoach } = useAuthStore();
   const [personalInfo, setPersonalInfo] = useState<any>(null);
+  const [exchanges, setExchanges] = useState<any[]>([]);
+  const [userData, setUserData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showExchangeForm, setShowExchangeForm] = useState(false);
+  const [newExchangeText, setNewExchangeText] = useState('');
 
   // Charger les données utilisateur depuis Firebase
   useEffect(() => {
@@ -31,6 +38,11 @@ const Dashboard: React.FC = () => {
           if (userData.personalInfo) {
             setPersonalInfo(userData.personalInfo);
           }
+          if (userData.exchanges) {
+            setExchanges(userData.exchanges);
+          }
+          // Stocker toutes les données pour les calculs de progression
+          setUserData(userData);
         }
       } catch (error: any) {
         console.error('Erreur lors du chargement des données utilisateur:', error);
@@ -123,6 +135,97 @@ const Dashboard: React.FC = () => {
     return `${Math.round(progress)}%`;
   };
 
+  // Calculs de progression réelle
+  const getCurrentWeek = () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), 0, 1);
+    const diff = now.getTime() - start.getTime();
+    return Math.ceil(diff / (7 * 24 * 60 * 60 * 1000));
+  };
+
+  const calculateNutritionProgress = () => {
+    if (!userData?.nutritionData) return 0;
+    const currentWeek = getCurrentWeek();
+    const weekData = userData.nutritionData[currentWeek];
+    if (!weekData) return 0;
+
+    const totalDays = 7;
+    const filledDays = Object.values(weekData.nutrition || {}).filter((jour: any) =>
+      Object.values(jour).some((repas: any) => repas?.toString().trim() !== '')
+    ).length;
+
+    return Math.round((filledDays / totalDays) * 100);
+  };
+
+  const calculateSleepProgress = () => {
+    if (!userData?.nutritionData) return 0;
+    const currentWeek = getCurrentWeek();
+    const weekData = userData.nutritionData[currentWeek];
+    if (!weekData) return 0;
+
+    const totalDays = 7;
+    const filledDays = Object.values(weekData.sommeil || {}).filter((horaire: any) =>
+      horaire?.coucher?.trim() !== '' && horaire?.reveil?.trim() !== ''
+    ).length;
+
+    return Math.round((filledDays / totalDays) * 100);
+  };
+
+  const calculateHabitsProgress = () => {
+    // Cette fonction nécessiterait d'accéder aux données d'habitudes
+    // Pour l'instant, on retourne une valeur par défaut
+    return 0;
+  };
+
+  const calculateHydrationProgress = () => {
+    if (!userData?.nutritionData) return 0;
+    const currentWeek = getCurrentWeek();
+    const weekData = userData.nutritionData[currentWeek];
+    if (!weekData) return 0;
+
+    const totalDays = 7;
+    const filledDays = Object.values(weekData.nutrition || {}).filter((jour: any) =>
+      jour?.eauBoissons?.trim() !== ''
+    ).length;
+
+    return Math.round((filledDays / totalDays) * 100);
+  };
+
+  // Fonctions pour les échanges
+  const addExchange = async () => {
+    if (!newExchangeText.trim() || !user?.id) return;
+
+    try {
+      const newExchange = {
+        id: Date.now().toString(),
+        date: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+        actionCoach: newExchangeText.trim(),
+        details: ''
+      };
+
+      const updatedExchanges = [...exchanges, newExchange];
+
+      await updateDoc(doc(db, 'users', user.id), {
+        exchanges: updatedExchanges,
+        updatedAt: new Date().toISOString()
+      });
+
+      setExchanges(updatedExchanges);
+      setNewExchangeText('');
+      setShowExchangeForm(false);
+
+      toast.success('Échange ajouté !');
+    } catch (error) {
+      console.error('Erreur lors de l\'ajout de l\'échange:', error);
+      toast.error('Erreur lors de l\'ajout');
+    }
+  };
+
+  const cancelExchange = () => {
+    setNewExchangeText('');
+    setShowExchangeForm(false);
+  };
+
   // Stats dynamiques basées sur les vraies données
   const stats = [
     {
@@ -155,12 +258,7 @@ const Dashboard: React.FC = () => {
     },
   ];
 
-  const recentActivities = [
-    { type: 'nutrition', description: 'Petit-déjeuner enregistré', time: '8h30' },
-    { type: 'exercise', description: 'Séance pyramide terminée', time: '7h15' },
-    { type: 'measurement', description: 'Poids mis à jour', time: 'Hier' },
-    { type: 'goal', description: 'Objectif eau atteint', time: 'Hier' },
-  ];
+  // recentActivities supprimé - remplacé par les échanges coach
 
   return (
     <div className="space-y-6">
@@ -277,24 +375,99 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Recent Activity */}
+        {/* Échanges avec le coach */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Activité récente</h3>
-          <div className="space-y-3">
-            {recentActivities.map((activity, index) => (
-              <div key={index} className="flex items-center space-x-3">
-                <div className={`w-2 h-2 rounded-full ${activity.type === 'nutrition' ? 'bg-primary-500' :
-                  activity.type === 'exercise' ? 'bg-orange-500' :
-                    activity.type === 'measurement' ? 'bg-green-500' :
-                      'bg-purple-500'
-                  }`} />
-                <div className="flex-1">
-                  <p className="text-sm text-gray-900">{activity.description}</p>
-                  <p className="text-xs text-gray-500">{activity.time}</p>
-                </div>
-              </div>
-            ))}
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+              <ChatBubbleLeftRightIcon className="h-5 w-5 mr-2" />
+              Échanges avec le coach
+            </h3>
+            <button
+              onClick={() => setShowExchangeForm(true)}
+              className="flex items-center px-3 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
+              disabled={showExchangeForm}
+              style={{ background: showExchangeForm ? '#9ca3af' : '#3b82f6' }}
+            >
+              <PlusIcon className="h-4 w-4 mr-1" />
+              Ajouter
+            </button>
           </div>
+
+          {/* Formulaire d'ajout */}
+          {showExchangeForm && (
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h4 className="font-medium text-blue-900 mb-2">Nouvel échange</h4>
+              <textarea
+                value={newExchangeText}
+                onChange={(e) => setNewExchangeText(e.target.value)}
+                className="w-full p-3 text-sm border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                rows={3}
+                placeholder="Décrivez votre échange, consultation, problématique ou résumé de la séance..."
+              />
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={addExchange}
+                  className="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
+                  disabled={!newExchangeText.trim()}
+                >
+                  Enregistrer
+                </button>
+                <button
+                  onClick={cancelExchange}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-400 transition-colors"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Liste des échanges */}
+          {exchanges.length === 0 ? (
+            <div className="text-center py-8">
+              <ChatBubbleLeftRightIcon className="h-8 w-8 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">Aucun échange pour le moment</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {exchanges.slice(-3).reverse().map((exchange: any, index: number) => (
+                <div key={exchange.id} className="border border-gray-200 rounded-lg p-3 hover:shadow-sm transition-shadow">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-blue-600 font-bold text-xs">{exchanges.length - index}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="text-sm font-medium text-gray-900">Échange du {exchange.date}</h4>
+                      </div>
+                      <p className="text-sm text-gray-700 line-clamp-2">{exchange.actionCoach}</p>
+
+                      {exchange.coachComment ? (
+                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                          <p className="text-xs text-green-700 font-medium">Retour du coach: {exchange.coachComment}</p>
+                        </div>
+                      ) : (
+                        <div className="mt-2">
+                          <span className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">En attente du retour de votre coach...</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {exchanges.length > 3 && (
+                <div className="text-center pt-2">
+                  <Link
+                    to="/profile"
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    Voir tous les échanges ({exchanges.length})
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -305,40 +478,40 @@ const Dashboard: React.FC = () => {
           <div>
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm font-medium text-gray-700">Nutrition</span>
-              <span className="text-sm text-gray-500">85%</span>
+              <span className="text-sm text-gray-500">{calculateNutritionProgress()}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-primary-500 h-2 rounded-full" style={{ width: '85%' }}></div>
-            </div>
-          </div>
-
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700">Exercices</span>
-              <span className="text-sm text-gray-500">70%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-orange-500 h-2 rounded-full" style={{ width: '70%' }}></div>
-            </div>
-          </div>
-
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700">Hydratation</span>
-              <span className="text-sm text-gray-500">95%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-blue-500 h-2 rounded-full" style={{ width: '95%' }}></div>
+              <div className="bg-primary-500 h-2 rounded-full transition-all duration-500" style={{ width: `${calculateNutritionProgress()}%` }}></div>
             </div>
           </div>
 
           <div>
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm font-medium text-gray-700">Sommeil</span>
-              <span className="text-sm text-gray-500">80%</span>
+              <span className="text-sm text-gray-500">{calculateSleepProgress()}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-purple-500 h-2 rounded-full" style={{ width: '80%' }}></div>
+              <div className="bg-purple-500 h-2 rounded-full transition-all duration-500" style={{ width: `${calculateSleepProgress()}%` }}></div>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-medium text-gray-700">Hydratation</span>
+              <span className="text-sm text-gray-500">{calculateHydrationProgress()}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-blue-500 h-2 rounded-full transition-all duration-500" style={{ width: `${calculateHydrationProgress()}%` }}></div>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-medium text-gray-700">Habitudes</span>
+              <span className="text-sm text-gray-500">{calculateHabitsProgress()}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-orange-500 h-2 rounded-full transition-all duration-500" style={{ width: `${calculateHabitsProgress()}%` }}></div>
             </div>
           </div>
         </div>

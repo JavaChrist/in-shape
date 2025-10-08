@@ -131,10 +131,24 @@ const Layout: React.FC = () => {
             </div>
             <button
               type="button"
-              className="text-gray-400 hover:text-gray-600"
+              className="nav-button text-gray-400 hover:text-gray-600"
               onClick={() => setSidebarOpen(false)}
+              style={{
+                background: 'transparent !important',
+                border: 'none !important',
+                outline: 'none !important',
+                padding: '4px',
+                width: 'auto',
+                height: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#9ca3af',
+                fontSize: 'inherit',
+                fontWeight: 'inherit'
+              }}
             >
-              <XMarkIcon className="h-6 w-6" />
+              <XMarkIcon className="h-6 w-6" style={{ color: '#9ca3af' }} />
             </button>
           </div>
           <nav className="flex-1 space-y-1 px-4 py-4">
@@ -237,11 +251,24 @@ const Layout: React.FC = () => {
         <div className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm lg:hidden">
           <button
             type="button"
-            className="p-2 text-gray-700 hover:bg-gray-100 rounded-md"
+            className="nav-button text-gray-700 hover:bg-gray-100 rounded-md"
             onClick={() => setSidebarOpen(true)}
-            style={{ width: '40px', height: '40px' }}
+            style={{
+              width: '40px',
+              height: '40px',
+              padding: '8px',
+              background: 'transparent !important',
+              border: 'none !important',
+              outline: 'none !important',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#374151',
+              fontSize: 'inherit',
+              fontWeight: 'inherit'
+            }}
           >
-            <Bars3Icon className="h-6 w-6" />
+            <Bars3Icon className="h-6 w-6" style={{ color: '#374151' }} />
           </button>
           <div className="flex items-center">
             <img src="/logo192.png" alt="InShape Logo" className="h-8 w-8 mr-2" />

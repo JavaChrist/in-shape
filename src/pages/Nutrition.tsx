@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CalendarIcon, ChartBarIcon, ClockIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline';
+import { CalendarIcon, ChartBarIcon, ClockIcon, CloudArrowUpIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuthStore } from '../store/useAuthStore';
@@ -44,8 +44,9 @@ const Nutrition: React.FC = () => {
   const { user } = useAuthStore();
   const [currentWeek, setCurrentWeek] = useState(1);
   const [weekData, setWeekData] = useState<{ [week: number]: WeekData }>({});
-  const [isLoading, setIsLoading] = useState(true);
+  // isLoading removed - not used in this component
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedDay, setSelectedDay] = useState('lundi');
 
   // Charger les données nutrition depuis Firebase
   useEffect(() => {
@@ -97,7 +98,7 @@ const Nutrition: React.FC = () => {
         console.error('Erreur lors du chargement des données nutrition:', error);
         toast.error('Erreur lors du chargement des données');
       } finally {
-        setIsLoading(false);
+        // Loading completed
       }
     };
 
@@ -334,18 +335,30 @@ const Nutrition: React.FC = () => {
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Navigation par semaines</h3>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center justify-center space-x-4">
             <button
               onClick={() => setCurrentWeek(Math.max(0, currentWeek - 1))}
-              className="btn-sm btn-secondary"
+              className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full"
               disabled={currentWeek <= 0}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                padding: '12px',
+                width: '56px',
+                height: '56px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
             >
-              ← Semaine précédente
+              <ChevronLeftIcon style={{ width: '32px', height: '32px', strokeWidth: 2 }} />
             </button>
             <select
               value={currentWeek}
               onChange={(e) => setCurrentWeek(parseInt(e.target.value))}
-              className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white text-center font-medium"
+              style={{ minWidth: '140px' }}
             >
               {Array.from({ length: 53 }, (_, i) => (
                 <option key={i} value={i}>
@@ -355,22 +368,151 @@ const Nutrition: React.FC = () => {
             </select>
             <button
               onClick={() => setCurrentWeek(Math.min(52, currentWeek + 1))}
-              className="btn-sm btn-secondary"
+              className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full"
               disabled={currentWeek >= 52}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                padding: '12px',
+                width: '56px',
+                height: '56px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
             >
-              Semaine suivante →
+              <ChevronRightIcon style={{ width: '32px', height: '32px', strokeWidth: 2 }} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Tableau Nutrition */}
-      <div className="card">
-        <div className="flex items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-            ALIMENTATION - Semaine {currentWeek}
-          </h3>
+      {/* Interface par jour (mobile et desktop) */}
+      <div className="card" style={{ display: 'block !important' }}>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          ALIMENTATION & SOMMEIL - Semaine {currentWeek}
+        </h3>
+
+        {/* Navigation des jours */}
+        <div className="grid grid-cols-7 gap-1 mb-4">
+          {jours.map((jour, index) => (
+            <button
+              key={jour}
+              onClick={() => setSelectedDay(jour)}
+              className={`p-2 text-xs rounded-md transition-colors ${selectedDay === jour
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              style={{
+                border: 'none',
+                outline: 'none'
+              }}
+            >
+              <div className="font-medium">{joursLabels[index]}</div>
+              <div className="text-xs opacity-75">{weekDates[index]}</div>
+            </button>
+          ))}
         </div>
+
+        {/* Formulaires pour le jour sélectionné */}
+        <div className="space-y-4">
+          {/* Nutrition du jour */}
+          <div>
+            <h4 className="font-medium text-gray-900 mb-3">Alimentation - {selectedDay}</h4>
+            <div className="space-y-3">
+              {categoriesNutrition.map((categorie) => {
+                const jourData = currentWeekData.nutrition[selectedDay as keyof typeof currentWeekData.nutrition];
+                const currentValue = jourData[categorie.key as keyof NutritionEntry];
+
+                return (
+                  <div key={categorie.key} className={`p-3 rounded-lg border ${categorie.color}`}>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {categorie.label}
+                    </label>
+                    <textarea
+                      value={currentValue}
+                      onChange={(e) => updateNutritionEntry(currentWeek, selectedDay, categorie.key, e.target.value)}
+                      className="w-full p-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                      rows={2}
+                      placeholder="Aliments consommés..."
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Sommeil du jour */}
+          <div>
+            <h4 className="font-medium text-gray-900 mb-3">Sommeil - {selectedDay}</h4>
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <div className="grid grid-cols-2 gap-4">
+                {/* Heure de coucher */}
+                <div>
+                  <label className="block text-sm font-medium text-blue-900 mb-2">
+                    Heure de coucher
+                  </label>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setSommeilPreset(currentWeek, selectedDay, '22:45', currentWeekData.sommeil[selectedDay as keyof typeof currentWeekData.sommeil]?.reveil || '')}
+                        className="text-xs px-3 py-1 bg-blue-100 hover:bg-blue-200 rounded text-blue-800"
+                      >
+                        22h45
+                      </button>
+                      <button
+                        onClick={() => setSommeilPreset(currentWeek, selectedDay, '23:00', currentWeekData.sommeil[selectedDay as keyof typeof currentWeekData.sommeil]?.reveil || '')}
+                        className="text-xs px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-800"
+                      >
+                        23h
+                      </button>
+                    </div>
+                    <input
+                      type="time"
+                      value={currentWeekData.sommeil[selectedDay as keyof typeof currentWeekData.sommeil]?.coucher || ''}
+                      onChange={(e) => updateSommeilEntry(currentWeek, selectedDay, 'coucher', e.target.value)}
+                      className="w-full p-2 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Heure de réveil */}
+                <div>
+                  <label className="block text-sm font-medium text-blue-900 mb-2">
+                    Heure de réveil
+                  </label>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setSommeilPreset(currentWeek, selectedDay, currentWeekData.sommeil[selectedDay as keyof typeof currentWeekData.sommeil]?.coucher || '', '06:00')}
+                        className="text-xs px-3 py-1 bg-blue-100 hover:bg-blue-200 rounded text-blue-800"
+                      >
+                        6h00
+                      </button>
+                      <button
+                        onClick={() => setSommeilPreset(currentWeek, selectedDay, currentWeekData.sommeil[selectedDay as keyof typeof currentWeekData.sommeil]?.coucher || '', '06:30')}
+                        className="text-xs px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-800"
+                      >
+                        6h30
+                      </button>
+                    </div>
+                    <input
+                      type="time"
+                      value={currentWeekData.sommeil[selectedDay as keyof typeof currentWeekData.sommeil]?.reveil || ''}
+                      onChange={(e) => updateSommeilEntry(currentWeek, selectedDay, 'reveil', e.target.value)}
+                      className="w-full p-2 text-sm border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tableau Nutrition (masqué, remplacé par l'interface ci-dessus) */}
+      <div className="card hidden">
 
         <div className="overflow-x-auto">
           <table className="w-full border-collapse border border-gray-300">

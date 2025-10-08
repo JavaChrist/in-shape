@@ -159,8 +159,8 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.btn-primary,
-button {
+/* Boutons principaux seulement */
+.btn-primary {
   background-color: #3b82f6;
   color: white;
   font-weight: 500;
@@ -172,13 +172,13 @@ button {
   width: 100%;
 }
 
-.btn-primary:hover,
-button:hover {
+/* CSS global boutons supprimé - cause trop de conflits */
+
+.btn-primary:hover {
   background-color: #2563eb;
 }
 
-.btn-primary:disabled,
-button:disabled {
+.btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -265,3 +265,30 @@ button:disabled {
     scrollbar-width: thin;
   }
 }
+
+/* Forcer l'affichage sur desktop aussi */
+@media (min-width: 1024px) {
+  /* S'assurer que l'interface mobile reste visible sur desktop */
+  .card {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  /* Forcer tous les éléments à rester visibles */
+  * {
+    max-width: none !important;
+    box-sizing: border-box !important;
+  }
+
+  /* S'assurer que les grids restent fonctionnels */
+  .grid {
+    display: grid !important;
+  }
+
+  /* Forcer l'affichage des boutons */
+  button {
+    display: inline-flex !important;
+  }
+}
+
+/* Styles de navigation simplifiés */

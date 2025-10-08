@@ -37,6 +37,11 @@ self.addEventListener("activate", (event) => {
 
 // Interception des requêtes
 self.addEventListener("fetch", (event) => {
+  // Ignorer les requêtes des extensions Chrome
+  if (event.request.url.startsWith("chrome-extension://")) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((response) => {
       // Retourner la ressource depuis le cache si disponible
@@ -45,21 +50,35 @@ self.addEventListener("fetch", (event) => {
       }
 
       // Sinon, faire la requête réseau
-      return fetch(event.request).then((response) => {
-        // Vérifier si la réponse est valide
-        if (!response || response.status !== 200 || response.type !== "basic") {
+      return fetch(event.request)
+        .then((response) => {
+          // Vérifier si la réponse est valide
+          if (
+            !response ||
+            response.status !== 200 ||
+            response.type !== "basic"
+          ) {
+            return response;
+          }
+
+          // Ignorer les requêtes des extensions
+          if (event.request.url.startsWith("chrome-extension://")) {
+            return response;
+          }
+
+          // Cloner la réponse
+          const responseToCache = response.clone();
+
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+
           return response;
-        }
-
-        // Cloner la réponse
-        const responseToCache = response.clone();
-
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
+        })
+        .catch(() => {
+          // En cas d'erreur réseau, retourner une réponse par défaut si possible
+          return caches.match("/");
         });
-
-        return response;
-      });
     })
   );
 });

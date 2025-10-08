@@ -139,7 +139,7 @@ const Measurements: React.FC = () => {
       } else if (age >= 50) {
         density = 1.1339 - (0.0645 * Math.log10(totalPlis));
       } else {
-        density = 1.1549 - (0.0678 * Math.log10(totalPlis)); // défaut 16-19 ans
+        density = 1.1549 - (0.0678 * Math.log10(totalPlis)); // défaut 16-19
       }
     }
 
@@ -420,15 +420,13 @@ const Measurements: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Mesures Corporelles</h1>
-          <p className="text-gray-600">Tableau de suivi quotidien - Calcul du taux de masse grasse</p>
+          <p className="text-gray-600">Suivi des mesures et calcul du taux de masse grasse</p>
         </div>
         <div className="flex items-center space-x-2 text-sm text-gray-500">
           <CalendarIcon className="h-4 w-4" />
           <span>{new Date().toLocaleDateString('fr-FR', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
+            day: '2-digit',
+            month: '2-digit'
           })}</span>
         </div>
       </div>
@@ -446,12 +444,12 @@ const Measurements: React.FC = () => {
               Poids actuel (kg)
             </label>
             <input
-              type="number"
-              step="0.1"
+              type="text"
+              inputMode="decimal"
               value={currentWeight.weight || ''}
               onChange={(e) => setCurrentWeight(prev => ({ ...prev, weight: parseFloat(e.target.value) || 0 }))}
               className="input-field"
-              placeholder="0.0"
+              placeholder="Votre poids en kg"
             />
           </div>
           <div>
@@ -468,26 +466,26 @@ const Measurements: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <button
             onClick={addWeightEntry}
             className="bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
-              width: 'auto',
-              padding: '0.375rem 1rem',
-              height: '38px',
+              width: '100%',
+              padding: '0.5rem 1rem',
+              height: '42px',
               border: 'none',
               fontSize: '14px'
             }}
             disabled={!currentWeight.weight}
           >
-            Enregistrer la pesée
+            Enregistrer
           </button>
 
           {weightEntries.length > 0 && (
-            <div className="bg-blue-50 rounded-lg border border-blue-200 flex items-center justify-center" style={{ height: '38px', padding: '0 16px', minWidth: '200px' }}>
+            <div className="bg-blue-50 rounded-lg border border-blue-200 flex items-center justify-center" style={{ height: '42px', padding: '0 16px', width: '100%' }}>
               <p className="text-sm font-medium text-blue-900 whitespace-nowrap text-center">
-                Dernière pesée: {weightEntries[weightEntries.length - 1]?.weight} kg - {weightEntries[weightEntries.length - 1]?.date}
+                Dernière pesée: {weightEntries[weightEntries.length - 1]?.weight} kg - {formatDateForChart(weightEntries[weightEntries.length - 1]?.date || '')}
               </p>
             </div>
           )}
@@ -496,25 +494,70 @@ const Measurements: React.FC = () => {
         {/* Graphique d'évolution du poids */}
         {weightEntries.length > 1 && (
           <div className="mb-4">
-            <h4 className="text-md font-medium text-gray-900 mb-2">Évolution du poids</h4>
-            <div className="h-48">
+            <h4 className="text-md font-medium text-gray-900 mb-3">📈 Évolution du poids</h4>
+            <div className="h-56 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-200" style={{ padding: '8px 8px 8px 8px' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={weightEntries.map(w => ({ ...w, date: formatDateForChart(w.date) }))} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" tick={{ dy: 10 }} height={60} />
-                  <YAxis domain={['dataMin - 1', 'dataMax + 1']} />
+                <LineChart data={weightEntries.map(w => ({ ...w, date: formatDateForChart(w.date) }))} margin={{ top: 60, right: 40, left: 60, bottom: 15 }}>
+                  <defs>
+                    <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.05} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="2 2" stroke="#fed7aa" opacity={0.6} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ dy: 10, fontSize: 12, fill: '#4b5563' }}
+                    height={60}
+                    axisLine={{ stroke: '#f97316', strokeWidth: 2 }}
+                    tickLine={{ stroke: '#f97316' }}
+                  />
+                  <YAxis
+                    domain={['dataMin - 1', 'dataMax + 1']}
+                    tick={{ fontSize: 12, fill: '#4b5563' }}
+                    axisLine={{ stroke: '#f97316', strokeWidth: 2 }}
+                    tickLine={{ stroke: '#f97316' }}
+                  />
                   <Tooltip
                     formatter={(value) => [`${value} kg`, 'Poids']}
                     labelFormatter={(label) => `Date: ${label}`}
+                    contentStyle={{
+                      backgroundColor: '#ffffff',
+                      border: '2px solid #10b981',
+                      borderRadius: '12px',
+                      boxShadow: '0 8px 32px rgba(16, 185, 129, 0.2)'
+                    }}
+                    labelStyle={{ color: '#065f46', fontWeight: 'bold' }}
                   />
                   <Line
                     type="monotone"
                     dataKey="weight"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
+                    stroke="url(#weightLineGradient)"
+                    strokeWidth={4}
+                    dot={{
+                      fill: '#ffffff',
+                      stroke: '#10b981',
+                      strokeWidth: 3,
+                      r: 6,
+                      filter: 'drop-shadow(0 2px 4px rgba(16, 185, 129, 0.3))'
+                    }}
+                    activeDot={{
+                      r: 8,
+                      fill: '#10b981',
+                      stroke: '#ffffff',
+                      strokeWidth: 3,
+                      filter: 'drop-shadow(0 4px 8px rgba(16, 185, 129, 0.4))'
+                    }}
                     name="Poids (kg)"
+                    fill="url(#weightGradient)"
                   />
+                  <defs>
+                    <linearGradient id="weightLineGradient" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#059669" />
+                      <stop offset="50%" stopColor="#10b981" />
+                      <stop offset="100%" stopColor="#34d399" />
+                    </linearGradient>
+                  </defs>
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -572,7 +615,7 @@ const Measurements: React.FC = () => {
                         <div className="flex-1">
                           <span className="font-medium">{entry.weight} kg</span>
                           {entry.note && <span className="text-sm text-gray-600 ml-2">- {entry.note}</span>}
-                          <div className="text-xs text-gray-500">{entry.date}</div>
+                          <div className="text-xs text-gray-500">{formatDateForChart(entry.date)}</div>
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -646,12 +689,12 @@ const Measurements: React.FC = () => {
               Biceps (en mm)
             </label>
             <input
-              type="number"
-              step="0.1"
+              type="text"
+              inputMode="decimal"
               value={currentMeasurement.biceps || ''}
               onChange={(e) => handleInputChange('biceps', parseFloat(e.target.value) || 0)}
               className="input-field"
-              placeholder="0.0"
+              placeholder="Mesure en mm"
             />
           </div>
 
@@ -660,12 +703,12 @@ const Measurements: React.FC = () => {
               Triceps (en mm)
             </label>
             <input
-              type="number"
-              step="0.1"
+              type="text"
+              inputMode="decimal"
               value={currentMeasurement.triceps || ''}
               onChange={(e) => handleInputChange('triceps', parseFloat(e.target.value) || 0)}
               className="input-field"
-              placeholder="0.0"
+              placeholder="Mesure en mm"
             />
           </div>
 
@@ -674,12 +717,12 @@ const Measurements: React.FC = () => {
               Sous-scapulaire (en mm)
             </label>
             <input
-              type="number"
-              step="0.1"
+              type="text"
+              inputMode="decimal"
               value={currentMeasurement.souScapulaire || ''}
               onChange={(e) => handleInputChange('souScapulaire', parseFloat(e.target.value) || 0)}
               className="input-field"
-              placeholder="0.0"
+              placeholder="Mesure en mm"
             />
           </div>
 
@@ -688,12 +731,12 @@ const Measurements: React.FC = () => {
               Supra-iliaque (en mm)
             </label>
             <input
-              type="number"
-              step="0.1"
+              type="text"
+              inputMode="decimal"
               value={currentMeasurement.supraIliaque || ''}
               onChange={(e) => handleInputChange('supraIliaque', parseFloat(e.target.value) || 0)}
               className="input-field"
-              placeholder="0.0"
+              placeholder="Mesure en mm"
             />
           </div>
         </div>
@@ -739,23 +782,54 @@ const Measurements: React.FC = () => {
             Évolution de la masse grasse
           </h3>
 
-          <div className="h-64">
+          <div className="h-64 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-200" style={{ padding: '8px 8px 8px 8px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={measurements.map(m => ({ ...m, date: formatDateForChart(m.date) }))} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ dy: 10 }} height={60} />
-                <YAxis domain={['dataMin - 1', 'dataMax + 1']} />
+                <CartesianGrid strokeDasharray="2 2" stroke="#fed7aa" opacity={0.6} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ dy: 10, fontSize: 12, fill: '#4b5563' }}
+                  height={60}
+                  axisLine={{ stroke: '#f97316', strokeWidth: 2 }}
+                  tickLine={{ stroke: '#f97316' }}
+                />
+                <YAxis
+                  domain={['dataMin - 1', 'dataMax + 1']}
+                  tick={{ fontSize: 12, fill: '#4b5563' }}
+                  axisLine={{ stroke: '#f97316', strokeWidth: 2 }}
+                  tickLine={{ stroke: '#f97316' }}
+                />
                 <Tooltip
                   formatter={(value) => [`${value}%`, 'Masse grasse']}
                   labelFormatter={(label) => `Date: ${label}`}
+                  contentStyle={{
+                    backgroundColor: '#ffffff',
+                    border: '2px solid #10b981',
+                    borderRadius: '12px',
+                    boxShadow: '0 8px 32px rgba(16, 185, 129, 0.2)'
+                  }}
+                  labelStyle={{ color: '#065f46', fontWeight: 'bold' }}
                 />
                 <Legend />
                 <Line
                   type="monotone"
                   dataKey="massGrasse"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+                  stroke="#10b981"
+                  strokeWidth={4}
+                  dot={{
+                    fill: '#ffffff',
+                    stroke: '#10b981',
+                    strokeWidth: 3,
+                    r: 6,
+                    filter: 'drop-shadow(0 2px 4px rgba(16, 185, 129, 0.3))'
+                  }}
+                  activeDot={{
+                    r: 8,
+                    fill: '#10b981',
+                    stroke: '#ffffff',
+                    strokeWidth: 3,
+                    filter: 'drop-shadow(0 4px 8px rgba(16, 185, 129, 0.4))'
+                  }}
                   name="Taux de masse grasse (%)"
                 />
               </LineChart>
@@ -939,11 +1013,11 @@ const Measurements: React.FC = () => {
           {/* Biceps */}
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <div className="flex flex-col md:flex-row gap-4">
-              <div className="w-full md:w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
+              <div className="w-full md:w-40 h-40 bg-yellow-100 rounded-lg flex items-center justify-center overflow-hidden">
                 <img
                   src="/images/measurements/biceps.png"
                   alt="Mesure du biceps"
-                  className="w-full h-full object-cover rounded-lg"
+                  className="w-full h-full object-contain rounded-lg"
                   onError={handleImageError}
                   onLoad={handleImageLoad}
                 />
@@ -964,11 +1038,11 @@ const Measurements: React.FC = () => {
           {/* Triceps */}
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
             <div className="flex flex-col md:flex-row gap-4">
-              <div className="w-full md:w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
+              <div className="w-full md:w-40 h-40 bg-orange-100 rounded-lg flex items-center justify-center overflow-hidden">
                 <img
                   src="/images/measurements/triceps.png"
                   alt="Mesure du triceps"
-                  className="w-full h-full object-cover rounded-lg"
+                  className="w-full h-full object-contain rounded-lg"
                   onError={handleImageError}
                 />
                 <div className="hidden flex-col items-center justify-center w-full h-full">
@@ -988,11 +1062,11 @@ const Measurements: React.FC = () => {
           {/* Sous-scapulaire */}
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex flex-col md:flex-row gap-4">
-              <div className="w-full md:w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
+              <div className="w-full md:w-40 h-40 bg-green-100 rounded-lg flex items-center justify-center overflow-hidden">
                 <img
                   src="/images/measurements/pli-oblique.png"
                   alt="Mesure sous-scapulaire"
-                  className="w-full h-full object-cover rounded-lg"
+                  className="w-full h-full object-contain rounded-lg"
                   onError={handleImageError}
                 />
                 <div className="hidden flex-col items-center justify-center w-full h-full">
@@ -1012,11 +1086,11 @@ const Measurements: React.FC = () => {
           {/* Supra-iliaque */}
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
             <div className="flex flex-col md:flex-row gap-4">
-              <div className="w-full md:w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
+              <div className="w-full md:w-40 h-40 bg-purple-100 rounded-lg flex items-center justify-center overflow-hidden">
                 <img
                   src="/images/measurements/supra-iliaque.png"
                   alt="Mesure supra-iliaque"
-                  className="w-full h-full object-cover rounded-lg"
+                  className="w-full h-full object-contain rounded-lg"
                   onError={handleImageError}
                 />
                 <div className="hidden flex-col items-center justify-center w-full h-full">
@@ -1059,42 +1133,42 @@ const Measurements: React.FC = () => {
               <table className="min-w-full divide-y divide-gray-200 border border-gray-300">
                 <thead className="bg-blue-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider border-r border-gray-300">
+                    <th className="px-2 py-2 text-left text-xs font-medium text-blue-900 uppercase tracking-wider border-r border-gray-300">
 
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-blue-900 uppercase tracking-wider border-r border-gray-300">
-                      17-19 ans
+                    <th className="px-2 py-2 text-center text-xs font-medium text-blue-900 uppercase tracking-wider border-r border-gray-300">
+                      17-19
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-blue-900 uppercase tracking-wider border-r border-gray-300">
-                      20-29 ans
+                    <th className="px-2 py-2 text-center text-xs font-medium text-blue-900 uppercase tracking-wider border-r border-gray-300">
+                      20-29
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-blue-900 uppercase tracking-wider border-r border-gray-300">
-                      30-39 ans
+                    <th className="px-2 py-2 text-center text-xs font-medium text-blue-900 uppercase tracking-wider border-r border-gray-300">
+                      30-39
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-blue-900 uppercase tracking-wider border-r border-gray-300">
-                      40-49 ans
+                    <th className="px-2 py-2 text-center text-xs font-medium text-blue-900 uppercase tracking-wider border-r border-gray-300">
+                      40-49
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-blue-900 uppercase tracking-wider">
-                      &gt;50 ans
+                    <th className="px-2 py-2 text-center text-xs font-medium text-blue-900 uppercase tracking-wider">
+                      &gt;50
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   <tr>
-                    <td className="px-4 py-3 text-sm font-bold text-blue-900 border-r border-gray-300">C</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">1,1620</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">1,1631</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">1,1422</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">1,1620</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900">1,1715</td>
+                    <td className="px-2 py-2 text-sm font-bold text-blue-900 border-r border-gray-300">C</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">1,1620</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">1,1631</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">1,1422</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">1,1620</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900">1,1715</td>
                   </tr>
                   <tr className="bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-bold text-blue-900 border-r border-gray-300">M</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">0,0678</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">0,0632</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">0,0544</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">0,0700</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900">0,0779</td>
+                    <td className="px-2 py-2 text-sm font-bold text-blue-900 border-r border-gray-300">M</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">0,0678</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">0,0632</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">0,0544</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">0,0700</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900">0,0779</td>
                   </tr>
                 </tbody>
               </table>
@@ -1108,42 +1182,42 @@ const Measurements: React.FC = () => {
               <table className="min-w-full divide-y divide-gray-200 border border-gray-300">
                 <thead className="bg-pink-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-pink-900 uppercase tracking-wider border-r border-gray-300">
+                    <th className="px-2 py-2 text-left text-xs font-medium text-pink-900 uppercase tracking-wider border-r border-gray-300">
 
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-pink-900 uppercase tracking-wider border-r border-gray-300">
-                      16-19 ans
+                    <th className="px-2 py-2 text-center text-xs font-medium text-pink-900 uppercase tracking-wider border-r border-gray-300">
+                      16-19
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-pink-900 uppercase tracking-wider border-r border-gray-300">
-                      20-29 ans
+                    <th className="px-2 py-2 text-center text-xs font-medium text-pink-900 uppercase tracking-wider border-r border-gray-300">
+                      20-29
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-pink-900 uppercase tracking-wider border-r border-gray-300">
-                      30-39 ans
+                    <th className="px-2 py-2 text-center text-xs font-medium text-pink-900 uppercase tracking-wider border-r border-gray-300">
+                      30-39
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-pink-900 uppercase tracking-wider border-r border-gray-300">
-                      40-49 ans
+                    <th className="px-2 py-2 text-center text-xs font-medium text-pink-900 uppercase tracking-wider border-r border-gray-300">
+                      40-49
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-pink-900 uppercase tracking-wider">
-                      &gt;50 ans
+                    <th className="px-2 py-2 text-center text-xs font-medium text-pink-900 uppercase tracking-wider">
+                      &gt;50
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   <tr>
-                    <td className="px-4 py-3 text-sm font-bold text-pink-900 border-r border-gray-300">C</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">1,1549</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">1,1599</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">1,1423</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">1,1333</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900">1,1339</td>
+                    <td className="px-2 py-2 text-sm font-bold text-pink-900 border-r border-gray-300">C</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">1,1549</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">1,1599</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">1,1423</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">1,1333</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900">1,1339</td>
                   </tr>
                   <tr className="bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-bold text-pink-900 border-r border-gray-300">M</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">0,0678</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">0,0717</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">0,0632</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900 border-r border-gray-300">0,0612</td>
-                    <td className="px-4 py-3 text-sm text-center text-gray-900">0,0645</td>
+                    <td className="px-2 py-2 text-sm font-bold text-pink-900 border-r border-gray-300">M</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">0,0678</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">0,0717</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">0,0632</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900 border-r border-gray-300">0,0612</td>
+                    <td className="px-2 py-2 text-sm text-center text-gray-900">0,0645</td>
                   </tr>
                 </tbody>
               </table>
